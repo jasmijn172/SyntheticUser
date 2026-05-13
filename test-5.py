@@ -9,7 +9,11 @@ import json
 import os
 import time
 
+st.markdown('<div class="chat-shell">', unsafe_allow_html=True)
 
+# chat rendering hier
+
+st.markdown('</div>', unsafe_allow_html=True)
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
 # ─────────────────────────────────────────────
