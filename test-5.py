@@ -384,23 +384,23 @@ section[data-testid="stSidebar"] label{
 ===================================================== */
 
 .stForm{
-    position:fixed;
+    position:sticky;
     bottom:0;
-    left:300px;
-    right:0;
 
-    padding:20px 32px;
+    padding:20px 0 10px 0;
 
     background:
         linear-gradient(
             180deg,
             rgba(8,17,31,0),
-            rgba(8,17,31,.95) 35%
+            rgba(8,17,31,.98) 35%
         );
 
     backdrop-filter:blur(18px);
 
     z-index:999;
+
+    margin-top:30px;
 }
 
 .stTextInput input{
