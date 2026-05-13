@@ -9,11 +9,7 @@ import json
 import os
 import time
 
-st.markdown('<div class="chat-shell">', unsafe_allow_html=True)
 
-# chat rendering hier
-
-st.markdown('</div>', unsafe_allow_html=True)
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
 # ─────────────────────────────────────────────
@@ -30,7 +26,13 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+[data-testid="stAppViewContainer"]{
+    background:transparent !important;
+}
 
+[data-testid="stVerticalBlock"]{
+    gap:0rem !important;
+}
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@600;700&display=swap');
 
 /* =====================================================
@@ -86,6 +88,14 @@ header{
 /* =====================================================
    SIDEBAR
 ===================================================== */
+
+.main .block-container{
+    max-width:1100px !important;
+    padding-left:40px !important;
+    padding-right:40px !important;
+    padding-top:0 !important;
+    padding-bottom:120px !important;
+}
 
 section[data-testid="stSidebar"]{
     background:rgba(15,23,40,.92) !important;
