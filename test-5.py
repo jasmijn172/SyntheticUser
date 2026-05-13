@@ -760,4 +760,4 @@ with st.form("chat_form", clear_on_submit=True):
     with col2:
 
         st.form_submit_button("Send")
-```
+
