@@ -8,6 +8,7 @@ import streamlit as st
 import json
 import os
 import time
+from groq import Groq
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
@@ -287,19 +288,16 @@ hr { border-color: #253047 !important; }
 # GROQ CLIENT INIT
 # ─────────────────────────────────────────────
 def get_groq_client():
-    """Haal Groq client op, met fallback naar st.secrets of omgevingsvariabele."""
+    """Haal Groq client op via st.secrets of omgevingsvariabele."""
     api_key = None
     # 1) Streamlit secrets (voorkeur bij deployment)
     try:
-        api_key = st.secrets["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"]
+        api_key = st.secrets["GROQ_API_KEY"]
     except Exception:
         pass
-    # 2) Omgevingsvariabele
+    # 2) Omgevingsvariabele als fallback
     if not api_key:
-        api_key = os.environ.get("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")
-    # 3) Sidebar invoer (dev mode)
-    if not api_key:
-        api_key = st.session_state.get("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")
+        api_key = os.environ.get("GROQ_API_KEY")
     if api_key:
         return Groq(api_key=api_key)
     return None
@@ -621,8 +619,6 @@ if "scores" not in st.session_state:
     st.session_state.scores = {"bias": 85, "hallucinaties": 62, "inclusie": 55, "totaal": 67}
 if "persona_kaart_getoond" not in st.session_state:
     st.session_state.persona_kaart_getoond = False
-if "groq_api_key_input" not in st.session_state:
-    st.session_state.groq_api_key_input = ""
 if "rapport_open" not in st.session_state:
     st.session_state.rapport_open = False
 if "berichtentelling" not in st.session_state:
@@ -681,23 +677,11 @@ with st.sidebar:
     st.markdown("## ⚖️ Data Justice Assistent")
     st.markdown("---")
 
-    # API key invoer
-    st.markdown("### 🔑 Groq API Key")
-    api_key_input = st.text_input(
-        "API Key",
-        type="password",
-        value=st.session_state.groq_api_key_input,
-        placeholder="gsk_...",
-        label_visibility="collapsed",
-    )
-    if api_key_input:
-        st.session_state.groq_api_key_input = api_key_input
-
     client = get_groq_client()
     if client:
         st.markdown('<span style="color:#1DB87A;font-size:11px">✓ Groq verbonden (llama-3.3-70b)</span>', unsafe_allow_html=True)
     else:
-        st.markdown('<span style="color:#F59E0B;font-size:11px">⚠ Voer een Groq API key in</span>', unsafe_allow_html=True)
+        st.markdown('<span style="color:#EF4444;font-size:11px">✗ Groq API key niet gevonden — zie README</span>', unsafe_allow_html=True)
 
     st.markdown("---")
 
