@@ -1,4 +1,4 @@
-```python
+
 # =========================================================
 # ARCHIVE_4 STYLE — STREAMLIT FOUNDATION
 # Complete drop-in UI layer
