@@ -1994,7 +1994,6 @@ import os
 import time
 import math
 import re
-from groq import Groq
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
