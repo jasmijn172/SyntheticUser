@@ -12,19 +12,19 @@ import time
 import math
 import re
 
-import base64
-from pathlib import Path
+# import base64
+# from pathlib import Path
 
-def get_base64_image(image_path):
-    image_path = Path(image_path)
-    if not image_path.exists():
-        st.error(f"Afbeelding niet gevonden: {image_path.resolve()}")
-        st.stop()
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
+# def get_base64_image(image_path):
+#     image_path = Path(image_path)
+#     if not image_path.exists():
+#         st.error(f"Afbeelding niet gevonden: {image_path.resolve()}")
+#         st.stop()
+#     with open(image_path, "rb") as f:
+#         return base64.b64encode(f.read()).decode()
 
-image_path = "BackgroundSU.png"
-bg_base64 = get_base64_image(image_path)
+# image_path = "BackgroundSU.png"
+# bg_base64 = get_base64_image(image_path)
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
@@ -51,13 +51,10 @@ html, body, .stApp {
     font-size: 13px !important;
 }
 
-.stApp {
-    background-image: url("data:image/png;base64,{bg_base64}");
-    background-size: cover;
-    background-position: center top;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
+    p {
+ background-image: url(‘Background_SU.png’);
 }
+
 
 #MainMenu, footer, header { visibility: hidden; }
 .block-container {
