@@ -23,7 +23,7 @@ def get_base64_image(image_path):
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-image_path = "/Users/jij/Desktop/BackgroundSU.png"
+image_path = "/Images/BackgroundSU.png"
 bg_base64 = get_base64_image(image_path)
 
 # ─────────────────────────────────────────────
