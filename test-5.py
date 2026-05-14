@@ -1994,7 +1994,7 @@ import os
 import time
 import math
 import re
-
+from groq import Groq
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
@@ -3289,11 +3289,64 @@ def reset_chat():
 actieve_p = get_actieve_persona()
 scores = st.session_state.scores
 
-# Mood/Assign checker arrow labels
+# Mood/Assign arrow labels
 mood_arrow = "∧" if st.session_state.mood_open else "∨"
 assign_arrow = "∧" if st.session_state.assign_open else "∨"
 
+# Lees query params voor topbar knop-clicks (HTML form submit)
+_qp = st.query_params
+if _qp.get("tb_action") == "mood":
+    st.session_state.mood_open = not st.session_state.mood_open
+    st.session_state.assign_open = False
+    st.query_params.clear()
+    st.rerun()
+elif _qp.get("tb_action") == "assign":
+    st.session_state.assign_open = not st.session_state.assign_open
+    st.session_state.mood_open = False
+    st.query_params.clear()
+    st.rerun()
+elif _qp.get("tb_action") == "export":
+    st.query_params.clear()
+    # export wordt hieronder afgehandeld
+
+# Topbar volledig in HTML — knoppen gebruiken window.location voor state toggle
 st.markdown(f"""
+<style>
+/* Verberg de fallback Streamlit knop-rij volledig */
+div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:first-child > div[data-testid="stVerticalBlockBorderWrapper"]:empty) {{
+    display: none !important;
+}}
+/* Topbar container mag niet door Streamlit padding worden beïnvloed */
+.topbar {{
+    position: relative;
+    z-index: 200;
+}}
+.tb-nav-btn {{
+    background: #111827;
+    border: 1px solid #253047;
+    border-radius: 8px;
+    color: #8B9CB8;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    padding: 7px 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    text-decoration: none;
+}}
+.tb-nav-btn:hover {{ border-color: #3B7EF6; color: #F1F5F9; }}
+.tb-nav-btn-primary {{
+    background: #3B7EF6;
+    border-color: #3B7EF6;
+    color: white !important;
+    font-weight: 600;
+}}
+.tb-nav-btn-primary:hover {{ background: #5B9BFF; border-color: #5B9BFF; }}
+</style>
+
 <div class="topbar">
   <div class="tb-logo-wrap">
     <div class="tb-logo-icon">
@@ -3316,103 +3369,67 @@ st.markdown(f"""
       ReumaNederland · Team 3
     </div>
   </div>
-  <div class="tb-actions">
-    <div class="tb-topbar-btns" id="tb-topbar-btns"></div>
+  <div class="tb-actions" style="margin-left:auto;display:flex;align-items:center;gap:10px">
+    <a class="tb-nav-btn" href="?tb_action=mood">
+      😊 Mood checker {'∧' if st.session_state.mood_open else '∨'}
+    </a>
+    <a class="tb-nav-btn" href="?tb_action=assign">
+      📋 Assign project {'∧' if st.session_state.assign_open else '∨'}
+    </a>
+    <a class="tb-nav-btn tb-nav-btn-primary" href="?tb_action=export">
+      ↑ Export
+    </a>
   </div>
 </div>
-<style>
-/* Hide the Streamlit topbar button row completely — buttons are overlaid via columns below */
-div[data-testid="stHorizontalBlock"].tb-btn-row {{
-    background: #111827;
-    border-bottom: 1px solid #1C2A40;
-    padding: 6px 24px 6px auto;
-    margin-top: -8px;
-    justify-content: flex-end;
-    gap: 8px;
-}}
-/* Style the topbar Streamlit buttons to look native */
-div.tb-btn-row div[data-testid="stButton"] button {{
-    background: #111827 !important;
-    border: 1px solid #253047 !important;
-    border-radius: 8px !important;
-    color: #8B9CB8 !important;
-    font-size: 12px !important;
-    font-family: 'DM Sans', sans-serif !important;
-    padding: 6px 14px !important;
-    height: 36px !important;
-    white-space: nowrap !important;
-}}
-div.tb-btn-row div[data-testid="stButton"] button:hover {{
-    border-color: #3B7EF6 !important;
-    color: #F1F5F9 !important;
-}}
-div.tb-btn-row div[data-testid="stButton"] button[kind="primary"] {{
-    background: #3B7EF6 !important;
-    border-color: #3B7EF6 !important;
-    color: white !important;
-    font-weight: 600 !important;
-}}
-</style>
 """, unsafe_allow_html=True)
 
-# Topbar buttons — gerenderd als een compacte rij direct onder de topbar HTML
-# Ze worden gestyled zodat ze visueel in de topbar lijken te zitten
-_tb_spacer, _tb_mood, _tb_assign, _tb_export = st.columns([5, 1.2, 1.2, 0.8])
-with _tb_mood:
-    if st.button(f"😊 Mood checker {mood_arrow}", key="tb_mood"):
-        st.session_state.mood_open = not st.session_state.mood_open
-        st.session_state.assign_open = False
-        st.rerun()
-with _tb_assign:
-    if st.button(f"📋 Assign project {assign_arrow}", key="tb_assign"):
-        st.session_state.assign_open = not st.session_state.assign_open
-        st.session_state.mood_open = False
-        st.rerun()
-with _tb_export:
-    if st.button("↑ Export", key="tb_export", type="primary"):
-        export_data = {
-            "project": "ReumaNederland",
-            "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
-            "scores": st.session_state.scores,
-            "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
-        }
-        st.download_button(
-            "⬇ Download JSON",
-            data=json.dumps(export_data, indent=2, ensure_ascii=False),
-            file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
-            mime="application/json",
-            key="tb_download",
-        )
+# Export download (wordt geactiveerd als export query param eerder is ingesteld)
+if "tb_export_trigger" in st.session_state and st.session_state.tb_export_trigger:
+    st.session_state.tb_export_trigger = False
+    export_data = {
+        "project": "ReumaNederland",
+        "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
+        "scores": st.session_state.scores,
+        "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
+    }
+    st.download_button(
+        "⬇ Download JSON",
+        data=json.dumps(export_data, indent=2, ensure_ascii=False),
+        file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
+        mime="application/json",
+        key="tb_dl_trigger",
+    )
 
-# Mood checker dropdown
+# Mood checker dropdown (onder topbar)
 if st.session_state.mood_open:
-    with st.container():
-        st.markdown("""
-        <div style="background:#1a2438;border:1px solid #253047;border-radius:10px;
-                    padding:12px 16px;margin:0 0 8px 0;margin-left:auto;max-width:400px;float:right">
-          <div style="font-size:11px;font-weight:600;color:#F1F5F9;margin-bottom:8px">😊 Mood checker</div>
-        </div>
-        <div style="clear:both"></div>
-        """, unsafe_allow_html=True)
-        mood_cols = st.columns(6)
-        moods = list(st.session_state.mood_opties.items())
-        for i, (mood, checked) in enumerate(moods):
-            with mood_cols[i]:
-                new_val = st.checkbox(mood, value=checked, key=f"mood_{mood}")
-                st.session_state.mood_opties[mood] = new_val
+    st.markdown("""
+    <div style="background:#1a2438;border:1px solid #253047;border-radius:0 0 10px 10px;
+                border-top:none;padding:10px 16px 12px;display:flex;flex-wrap:wrap;gap:6px 24px;
+                margin-top:-4px;">
+      <div style="width:100%;font-size:11px;font-weight:600;color:#8B9CB8;margin-bottom:4px;
+                  text-transform:uppercase;letter-spacing:.5px">Mood selectie</div>
+    </div>
+    """, unsafe_allow_html=True)
+    mood_cols = st.columns(6)
+    for i, (mood, checked) in enumerate(st.session_state.mood_opties.items()):
+        with mood_cols[i]:
+            new_val = st.checkbox(mood, value=checked, key=f"mood_{mood}")
+            st.session_state.mood_opties[mood] = new_val
 
-# Assign project dropdown
+# Assign project dropdown (onder topbar)
 if st.session_state.assign_open:
-    with st.container():
-        st.markdown("""
-        <div style="font-size:11px;font-weight:600;color:#F1F5F9;padding:4px 0 6px">📋 Assign project</div>
-        """, unsafe_allow_html=True)
-        assign_cols = st.columns(6)
-        assigns = list(st.session_state.assign_opties.items())
-        for i, (name, checked) in enumerate(assigns):
-            with assign_cols[i]:
-                new_val = st.checkbox(name, value=checked, key=f"assign_{name}")
-                st.session_state.assign_opties[name] = new_val
+    st.markdown("""
+    <div style="background:#1a2438;border:1px solid #253047;border-radius:0 0 10px 10px;
+                border-top:none;padding:10px 16px 12px;margin-top:-4px;">
+      <div style="font-size:11px;font-weight:600;color:#8B9CB8;margin-bottom:6px;
+                  text-transform:uppercase;letter-spacing:.5px">Team toewijzing</div>
+    </div>
+    """, unsafe_allow_html=True)
+    assign_cols = st.columns(6)
+    for i, (name, checked) in enumerate(st.session_state.assign_opties.items()):
+        with assign_cols[i]:
+            new_val = st.checkbox(name, value=checked, key=f"assign_{name}")
+            st.session_state.assign_opties[name] = new_val
 
 
 # ─────────────────────────────────────────────
@@ -3444,6 +3461,7 @@ with st.sidebar:
 
         for p in PERSONAS:
             is_actief = p["id"] == st.session_state.actieve_persona_id
+            is_open = is_actief and st.session_state.sidebar_mode == "persona_detail"
             avatar_class = "sb-persona-avatar sb-persona-avatar-active" if is_actief else "sb-persona-avatar"
             item_class = "sb-persona-item active" if is_actief else "sb-persona-item"
             age_class = "sb-persona-age sb-persona-age-active" if is_actief else "sb-persona-age"
@@ -3467,58 +3485,59 @@ with st.sidebar:
                 </div>
                 """, unsafe_allow_html=True)
 
-            if st.button("▷" if not is_actief else "▼", key=f"sel_persona_{p['id']}", help=f"Selecteer {p['naam']}"):
-                wissel_persona(p["id"])
-                st.session_state.sidebar_mode = "persona_detail" if is_actief else "personas"
-                st.rerun()
+            with col_arr:
+                pijl = "▼" if is_open else ("▷" if is_actief else "▷")
+                if st.button(pijl, key=f"sel_persona_{p['id']}", help=f"Selecteer {p['naam']}"):
+                    if not is_actief:
+                        # Wissel naar andere persona, sluit detail
+                        wissel_persona(p["id"])
+                        st.session_state.sidebar_mode = "personas"
+                    else:
+                        # Toggle detail van actieve persona
+                        st.session_state.sidebar_mode = "personas" if is_open else "persona_detail"
+                    st.rerun()
 
-        st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
-
-        # Persona detail (expanded — screen 5 stijl)
-        if st.session_state.sidebar_mode == "persona_detail":
-            p = actieve_p
-            tags_html = "".join([f'<span class="sb-persona-exp-tag">{t}</span>' for t in p["tags"]])
-            st.markdown(f"""
-            <div class="sb-persona-expanded">
-              <div class="sb-persona-exp-header">
-                <img class="sb-persona-exp-photo" src="https://i.pravatar.cc/80?u={p['id']}"
-                     alt="{p['naam']}" onerror="this.style.background='#253047';this.src=''">
-                <div>
-                  <div class="sb-persona-exp-name">{p['naam']}
-                    <span style="font-size:10px;color:#5a7090;margin-left:4px">✎</span>
+            # Toon uitklapkaart DIRECT onder deze persona als die actief + open is
+            if is_open:
+                tags_html = "".join([f'<span class="sb-persona-exp-tag">{t}</span>' for t in p["tags"]])
+                st.markdown(f"""
+                <div class="sb-persona-expanded">
+                  <div class="sb-persona-exp-header">
+                    <img class="sb-persona-exp-photo" src="https://i.pravatar.cc/80?u={p['id']}"
+                         alt="{p['naam']}" onerror="this.style.background='#253047';this.src=''">
+                    <div>
+                      <div class="sb-persona-exp-name">{p['naam']}
+                        <span style="font-size:10px;color:#5a7090;margin-left:4px">✎</span>
+                      </div>
+                      <div class="sb-persona-exp-diag">🔴 {p['diagnose']}</div>
+                    </div>
                   </div>
-                  <div class="sb-persona-exp-diag">🔴 {p['diagnose']}</div>
+                  <div class="sb-persona-exp-goals">
+                    <span style="color:#8B9CB8;font-size:10px">🎯 {p['goals'][:20]}</span>
+                    <span style="color:#8B9CB8;font-size:10px;margin-left:8px">💻 {p['tech_support']}</span>
+                  </div>
+                  <div class="sb-persona-exp-tags">{tags_html}</div>
+                  <div class="sb-persona-exp-quote">"{p['quote']}"</div>
                 </div>
-              </div>
-              <div class="sb-persona-exp-goals">
-                <span style="color:#8B9CB8;font-size:10px">🎯 stay active</span>
-                <span style="color:#8B9CB8;font-size:10px;margin-left:8px">💍 Married</span>
-                <span style="color:#8B9CB8;font-size:10px;margin-left:8px">💼 HR-Lead</span>
-              </div>
-              <div class="sb-persona-exp-tags">{tags_html}</div>
-              <div class="sb-persona-exp-quote">"{p['quote']}"</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            col_save, col_regen = st.columns(2)
-            with col_save:
-                st.button("Save Persona's", key="save_persona", use_container_width=True)
-            with col_regen:
-                if st.button("(Re)Generate Persona's", key="regen_persona", use_container_width=True):
-                    st.session_state.sidebar_mode = "personas"
-                    st.rerun()
-        else:
-            col_edit, col_gen = st.columns(2)
-            with col_edit:
-                if st.button("Edit Persona's", key="edit_personas", use_container_width=True):
-                    st.session_state.sidebar_mode = "persona_detail"
-                    st.rerun()
-            with col_gen:
-                st.button("Generate Persona's", key="gen_personas", use_container_width=True)
+                """, unsafe_allow_html=True)
+                col_save, col_regen = st.columns(2)
+                with col_save:
+                    st.button("Save Persona's", key=f"save_persona_{p['id']}", use_container_width=True)
+                with col_regen:
+                    if st.button("(Re)Generate", key=f"regen_persona_{p['id']}", use_container_width=True):
+                        st.session_state.sidebar_mode = "personas"
+                        st.rerun()
 
         st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+        col_edit, col_gen = st.columns(2)
+        with col_edit:
+            if st.button("Edit Persona's", key="edit_personas", use_container_width=True):
+                st.session_state.sidebar_mode = "persona_detail"
+                st.rerun()
+        with col_gen:
+            st.button("Generate Persona's", key="gen_personas", use_container_width=True)
 
-        # Dataset sectie
+        st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
         st.markdown('<div class="sb-section-title">Dataset</div>', unsafe_allow_html=True)
         st.markdown(f"""
         <div class="sb-dataset-item">
@@ -4047,5 +4066,3 @@ if send_clicked and user_input.strip():
 
         st.session_state.berichtentelling += 1
         st.rerun()
-
-
