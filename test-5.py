@@ -173,41 +173,7 @@ section[data-testid="stSidebar"] .stSelectbox > div > div {
 .xai-source::before { content: "• "; color: #3B7EF6; }
 .xai-expl { font-size: 11px; color: #8B9CB8; line-height: 1.5; }
 
-/* ── Reliability badges ── */
-.rel-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 24px;
-    background: #111827;
-    border-top: 1px solid #253047;
-    flex-wrap: wrap;
-}
-.rel-label { font-size: 11px; color: #8B9CB8; }
-.rel-badge-amber {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(245,158,11,.13); color: #F59E0B;
-    border: 1px solid rgba(245,158,11,.3);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
-}
-.rel-badge-green {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(29,184,122,.1); color: #1DB87A;
-    border: 1px solid rgba(29,184,122,.3);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
-}
-.rel-badge-blue {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(59,126,246,.1); color: #5B9BFF;
-    border: 1px solid rgba(59,126,246,.25);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
-}
-.rel-badge-red {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(239,68,68,.12); color: #EF4444;
-    border: 1px solid rgba(239,68,68,.3);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
-}
+......
 
 /* ── Score ring ── */
 .score-ring-outer { display: flex; flex-direction: column; align-items: center; padding: 16px 0; }
@@ -247,6 +213,42 @@ div[data-testid="stButton"] > button {
 }
 div[data-testid="stButton"] > button:hover {
     background: #5B9BFF !important;
+}
+
+/* ── Reliability badges ── */
+.rel-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    background: #111827;
+    border-top: 1px solid #253047;
+    flex-wrap: wrap;
+}
+.rel-label { font-size: 11px; color: #8B9CB8; }
+.rel-badge-amber {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(245,158,11,.13); color: #F59E0B;
+    border: 1px solid rgba(245,158,11,.3);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+}
+.rel-badge-green {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(29,184,122,.1); color: #1DB87A;
+    border: 1px solid rgba(29,184,122,.3);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+}
+.rel-badge-blue {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(59,126,246,.1); color: #5B9BFF;
+    border: 1px solid rgba(59,126,246,.25);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+}
+.rel-badge-red {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(239,68,68,.12); color: #EF4444;
+    border: 1px solid rgba(239,68,68,.3);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
 }
 
 /* ── Metric kaartjes ── */
