@@ -68,7 +68,7 @@ html, body, .stApp {
     font-size: 13px !important;
 }
 
-    p {
+p {
  background-image: url(‘Background_SU.png’);
 }
 
