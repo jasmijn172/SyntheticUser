@@ -12,6 +12,31 @@ import time
 import math
 import re
 
+client = None
+
+def getgroqclient():
+    apikey = None
+    try:
+        apikey = st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
+
+    if not apikey:
+        apikey = os.environ.get("GROQ_API_KEY")
+
+    if apikey:
+        return Groq(api_key=apikey)
+
+    return None
+
+client = getgroqclient()
+
+if not client:
+    st.warning("Voeg GROQ_API_KEY toe aan secrets of environment variables.")
+    st.stop()
+
+
+
 # import base64
 # from pathlib import Path
 
