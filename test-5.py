@@ -6,7 +6,6 @@ Groq API (llama-3.3-70b-versatile) voor AI chat
 """
 
 from groq import Client
-from groq import Groq
 import streamlit as st
 import json
 import os
