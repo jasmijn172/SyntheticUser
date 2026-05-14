@@ -2143,9 +2143,8 @@ from typing import List, Dict, Any
 import streamlit as st
 import pandas as pd
 import numpy as np
-from dotenv import load_dotenv
 
-load_dotenv()
+
 
 # -------------------------
 # Config / GROQ helper
