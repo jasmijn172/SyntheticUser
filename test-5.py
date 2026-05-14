@@ -68,7 +68,7 @@ html, body, .stApp {
     font-size: 13px !important;
 }
 
-p {
+    p {
  background-image: url(‘Background_SU.png’);
 }
 
@@ -460,10 +460,6 @@ section[data-testid="stSidebar"] .stSelectbox > div > div {
     font-weight: 500;
 }
 .rel-view:hover { text-decoration: underline; }
-
-.rel-button-wrap {
-    margin-left: auto;
-}
 
 /* ── Input ── */
 .input-wrap {
@@ -1879,41 +1875,15 @@ with (chat_col if panel_open else st.container()):
       <span class="rel-badge {badge_class(h_score)}">{badge_icon(h_score)} {h_lbl}</span>
       <span class="rel-badge {badge_class(b_score)}">{badge_icon(b_score)} {b_lbl}</span>
       <span class="rel-badge {badge_class(i_score)}">{badge_icon(i_score)} {i_lbl}</span>
-      <span class="rel-view">View Full Report &gt;&gt;</span>
     </div>
     """, unsafe_allow_html=True)
 
-    col_rel_left, col_rel_right = st.columns([10, 1])
-    with col_rel_right:
-        if st.button("📊 View Full Report", key="btn_view_full_report"):
+    # "View Full Report >>" als Streamlit knop rechts uitgelijnd → opent validation panel
+    _rel_spacer, _rel_vfr = st.columns([4, 1])
+    with _rel_vfr:
+        if st.button("📊 View Full Report >>", key="btn_view_full_report"):
             st.session_state.panel_mode = "validation" if st.session_state.panel_mode != "validation" else None
             st.rerun()
-
-# .rel-button-wrap {
-#     margin-left: auto;
-# }
-
-# div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) {
-#     margin-left: auto;
-#     width: fit-content;
-# }
-
-# div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) button {
-#     background: transparent !important;
-#     border: none !important;
-#     color: #3B7EF6 !important;
-#     font-size: 11px !important;
-#     font-weight: 500 !important;
-#     padding: 4px 0 !important;
-#     height: auto !important;
-#     text-align: right !important;
-#     box-shadow: none !important;
-# }
-
-# div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) button:hover {
-#     text-decoration: underline !important;
-#     color: #5B9BFF !important;
-# }
 
     # Score detail expander -------------------------------------------------------------------------------------------------------------------------------
     if st.session_state.berichtentelling > 0:
