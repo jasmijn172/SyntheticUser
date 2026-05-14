@@ -1,622 +1,1052 @@
 """
-Data Justice Assistent — Streamlit versie met eigen dataset
-Upload cleaned_reuma_enquete_V03.csv (of vergelijkbaar) om persona's te genereren.
+Data Justice Assistent — Streamlit App
+Synthetic User als cognitieve agent met real-time bias/hallucinatie/inclusie tracking
+Gebouwd met Groq API (llama-3.3-70b-versatile) + LangGraph-geïnspireerde validatieflow
 """
 
 import streamlit as st
 import json
-import re
-import pandas as pd
-import numpy as np
-from datetime import datetime
+import os
+import time
+from groq import Groq
 
-# ─── CONFIG ───────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# PAGINA CONFIG
+# ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Data Justice Assistent",
-    page_icon="⚖",
+    page_icon="⚖️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# ─── STYLING ──────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# CUSTOM CSS — Dark Navy stijl (Archive_4 ontwerp)
+# ─────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family:'Inter',sans-serif; background:#05080f; color:#f0f4f8; }
-section[data-testid="stSidebar"] { background:#080e1a !important; border-right:1px solid #1a2d45; }
-section[data-testid="stSidebar"] * { color:#b0c4dc; }
-.main .block-container { background:#05080f; padding-top:1.2rem; max-width:100%; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@600;700&display=swap');
 
-.user-msg   { background:#0F3460; border:1px solid #3b82f633; border-radius:12px 4px 12px 12px; padding:12px 16px; margin:8px 0 8px 60px; font-size:14px; color:#f0f4f8; line-height:1.6; }
-.assistant-msg { background:#0b1422; border:1px solid #1a2d45; border-radius:4px 12px 12px 12px; padding:12px 16px; margin:8px 60px 8px 0; font-size:14px; color:#b0c4dc; line-height:1.6; }
-.msg-meta   { font-size:11px; color:#3d5a78; margin-bottom:4px; }
+/* ── Globaal ── */
+html, body, .stApp {
+    background-color: #0B1220 !important;
+    color: #F1F5F9 !important;
+    font-family: 'Inter', sans-serif !important;
+}
+#MainMenu, footer, header { visibility: hidden; }
+.block-container { padding: 0 !important; max-width: 100% !important; }
 
-.persona-card { background:#0b1422; border:1px solid #1a2d45; border-radius:12px; padding:16px; margin:8px 0 12px; }
-.tag { display:inline-block; padding:2px 8px; border-radius:10px; background:#132238; color:#6b8aaa; font-size:11px; border:1px solid #1a2d45; margin:2px; }
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+    background: #111827 !important;
+    border-right: 1px solid #253047 !important;
+    min-width: 270px !important;
+}
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] .stRadio label span {
+    color: #8B9CB8 !important;
+    font-size: 13px !important;
+}
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #F1F5F9 !important;
+    font-family: 'Sora', sans-serif !important;
+}
+section[data-testid="stSidebar"] .stButton button {
+    background: #1a2438 !important;
+    color: #8B9CB8 !important;
+    border: 1px solid #253047 !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+    padding: 6px 12px !important;
+    width: 100% !important;
+}
+section[data-testid="stSidebar"] .stButton button:hover {
+    background: #1f2d47 !important;
+    color: #F1F5F9 !important;
+    border-color: #3B7EF6 !important;
+}
+section[data-testid="stSidebar"] .stSelectbox > div > div {
+    background: #1a2438 !important;
+    border: 1px solid #253047 !important;
+    color: #F1F5F9 !important;
+    border-radius: 8px !important;
+}
 
-.pill-green { background:#0d4a38; color:#1D9E75; border:1px solid #1D9E7544; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; display:inline-block; margin:2px; }
-.pill-amber { background:#422a08; color:#d97706; border:1px solid #d9770644; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; display:inline-block; margin:2px; }
-.pill-red   { background:#4a0e0e; color:#dc2626; border:1px solid #dc262644; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; display:inline-block; margin:2px; }
+/* ── Topbar ── */
+.topbar {
+    background: #111827;
+    border-bottom: 1px solid #253047;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.topbar-logo {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: #F1F5F9;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.topbar-project {
+    font-family: 'Sora', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #3B7EF6;
+    margin-left: 12px;
+}
+.topbar-sub {
+    font-size: 11px;
+    color: #8B9CB8;
+}
 
-.xai-block  { background:#0f1c30; border:1px solid #1a2d45; border-radius:8px; padding:12px; margin-top:10px; }
-.score-card { background:#0b1422; border:1px solid #1a2d45; border-radius:10px; padding:14px; }
+/* ── Chat berichten ── */
+.msg-wrap-bot { display: flex; flex-direction: column; margin-bottom: 18px; }
+.msg-wrap-user { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 18px; }
+.msg-time { font-size: 10px; color: #8B9CB8; margin-bottom: 4px; }
+.msg-sender {
+    font-size: 11px; color: #5B9BFF; font-weight: 600;
+    margin-bottom: 5px; display: flex; align-items: center; gap: 6px;
+}
+.bubble-bot {
+    background: #151f33;
+    border: 1px solid #253047;
+    border-radius: 12px 12px 12px 4px;
+    padding: 12px 16px;
+    max-width: 82%;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #F1F5F9;
+}
+.bubble-user {
+    background: #3B7EF6;
+    border-radius: 12px 12px 4px 12px;
+    padding: 12px 16px;
+    max-width: 72%;
+    font-size: 13px;
+    line-height: 1.65;
+    color: white;
+}
 
-.stButton button { background:#0f1c30 !important; border:1px solid #1a2d45 !important; color:#b0c4dc !important; border-radius:8px !important; font-size:12px !important; }
-.stButton button:hover { background:#132238 !important; border-color:#243d5c !important; }
-.stTextInput input, .stTextArea textarea { background:#0b1422 !important; border:1px solid #1a2d45 !important; color:#f0f4f8 !important; border-radius:10px !important; }
-.stSelectbox > div > div { background:#0b1422 !important; border:1px solid #1a2d45 !important; color:#f0f4f8 !important; }
-div[data-testid="stExpander"] { background:#0b1422; border:1px solid #1a2d45; border-radius:8px; }
-.stTabs [data-baseweb="tab-list"] { background:#080e1a; border-bottom:1px solid #1a2d45; }
-.stTabs [data-baseweb="tab"]      { color:#6b8aaa; font-size:12px; }
-.stTabs [aria-selected="true"]    { color:#f0f4f8 !important; border-bottom-color:#3b82f6 !important; }
-hr { border-color:#1a2d45 !important; }
+/* ── Persona kaart ── */
+.persona-card {
+    background: #1a2438;
+    border: 1px solid #2E3D5A;
+    border-radius: 14px;
+    padding: 18px;
+    margin-top: 10px;
+    max-width: 800px;
+}
+.pc-name { font-family: 'Sora', sans-serif; font-size: 18px; font-weight: 700; color: #F1F5F9; margin-bottom: 2px; }
+.pc-diag { font-size: 11px; color: #1DB87A; margin-bottom: 6px; }
+.pc-quote { font-size: 12px; color: #8B9CB8; font-style: italic; line-height: 1.55; margin-bottom: 10px; }
+.pc-age { background: rgba(59,126,246,.18); color: #5B9BFF; border-radius: 20px; padding: 3px 14px; font-size: 11px; font-weight: 700; display: inline-block; }
+.pc-tag { display: inline-block; background: #111827; border: 1px solid #2E3D5A; color: #8B9CB8; border-radius: 20px; padding: 2px 10px; font-size: 10px; margin: 2px 2px 2px 0; }
+.pc-det-label { color: #8B9CB8; font-size: 11px; min-width: 100px; }
+.pc-det-val { color: #F1F5F9; font-size: 11px; }
+
+/* ── XAI sectie ── */
+.xai-box {
+    background: #111827;
+    border: 1px solid #253047;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-top: 10px;
+    max-width: 800px;
+}
+.xai-title { font-size: 13px; font-weight: 600; color: #F1F5F9; margin-bottom: 10px; }
+.xai-accent { color: #5B9BFF; }
+.xai-badge {
+    display: inline-block;
+    background: rgba(59,126,246,.15);
+    color: #5B9BFF;
+    border-radius: 12px;
+    padding: 2px 9px;
+    font-size: 10px;
+    margin: 2px 2px 2px 0;
+}
+.xai-source { font-size: 11px; color: #F1F5F9; padding: 2px 0; }
+.xai-source::before { content: "• "; color: #3B7EF6; }
+.xai-expl { font-size: 11px; color: #8B9CB8; line-height: 1.5; }
+
+/* ── Reliability badges ── */
+.rel-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    background: #111827;
+    border-top: 1px solid #253047;
+    flex-wrap: wrap;
+}
+.rel-label { font-size: 11px; color: #8B9CB8; }
+.rel-badge-amber {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(245,158,11,.13); color: #F59E0B;
+    border: 1px solid rgba(245,158,11,.3);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+}
+.rel-badge-green {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(29,184,122,.1); color: #1DB87A;
+    border: 1px solid rgba(29,184,122,.3);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+}
+.rel-badge-blue {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(59,126,246,.1); color: #5B9BFF;
+    border: 1px solid rgba(59,126,246,.25);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+}
+.rel-badge-red {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(239,68,68,.12); color: #EF4444;
+    border: 1px solid rgba(239,68,68,.3);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+}
+
+/* ── Score ring ── */
+.score-ring-outer { display: flex; flex-direction: column; align-items: center; padding: 16px 0; }
+
+/* ── Sidebar persona items ── */
+.persona-sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    border: 1px solid transparent;
+    margin-bottom: 5px; cursor: pointer;
+    transition: .15s;
+}
+.persona-sidebar-item.active { background: rgba(59,126,246,.12); border-color: rgba(59,126,246,.4); }
+
+/* ── Input ── */
+.stTextInput input {
+    background: #1a2438 !important;
+    border: 1px solid #2E3D5A !important;
+    border-radius: 10px !important;
+    color: #F1F5F9 !important;
+    font-size: 13px !important;
+    padding: 10px 16px !important;
+}
+.stTextInput input:focus { border-color: #3B7EF6 !important; }
+.stTextInput input::placeholder { color: #8B9CB8 !important; }
+
+/* ── Stuur-knop ── */
+div[data-testid="stButton"] > button {
+    background: #3B7EF6 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 10px 20px !important;
+    transition: .15s !important;
+}
+div[data-testid="stButton"] > button:hover {
+    background: #5B9BFF !important;
+}
+
+/* ── Metric kaartjes ── */
+.metric-card {
+    background: #151f33;
+    border: 1px solid #253047;
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+}
+.metric-val { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+.metric-lbl { font-size: 10px; color: #8B9CB8; text-transform: uppercase; letter-spacing: .5px; }
+
+/* ── Expander styling ── */
+.streamlit-expanderHeader {
+    background: #1a2438 !important;
+    border: 1px solid #253047 !important;
+    border-radius: 8px !important;
+    color: #F1F5F9 !important;
+    font-size: 13px !important;
+}
+.streamlit-expanderContent {
+    background: #111827 !important;
+    border: 1px solid #253047 !important;
+    border-top: none !important;
+}
+
+/* ── Divider ── */
+hr { border-color: #253047 !important; }
+
+/* ── Selectbox ── */
+.stSelectbox label { color: #8B9CB8 !important; font-size: 11px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── HELPERS ──────────────────────────────────────────────────────────────────
-def score_color(s):
-    return "#1D9E75" if s>=81 else "#d97706" if s>=71 else "#dc2626"
-def score_label(s):
-    return "Low" if s>=81 else "Medium" if s>=71 else "High"
-def score_icon(s):
-    return "✓" if s>=81 else "⚠" if s>=71 else "✕"
-def pill_class(s):
-    return "pill-green" if s>=81 else "pill-amber" if s>=71 else "pill-red"
-def pill_html(label, score):
-    return f'<span class="{pill_class(score)}">{score_icon(score)} {label} – {score_label(score)}</span>'
 
-def parse_scores(raw):
+# ─────────────────────────────────────────────
+# GROQ CLIENT INIT
+# ─────────────────────────────────────────────
+def get_groq_client():
+    """Haal Groq client op, met fallback naar st.secrets of omgevingsvariabele."""
+    api_key = None
+    # 1) Streamlit secrets (voorkeur bij deployment)
     try:
-        m = re.search(r'<<<SCORES>>>([\s\S]*?)<<<END>>>', raw)
-        if m: return json.loads(m.group(1).strip())
-    except: pass
-    try:
-        m = re.search(r'\{[\s\S]*?"bias_score"[\s\S]*?\}', raw)
-        if m: return json.loads(m.group(0))
-    except: pass
+        api_key = st.secrets["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"]
+    except Exception:
+        pass
+    # 2) Omgevingsvariabele
+    if not api_key:
+        api_key = os.environ.get("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")
+    # 3) Sidebar invoer (dev mode)
+    if not api_key:
+        api_key = st.session_state.get("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")
+    if api_key:
+        return Groq(api_key=api_key)
     return None
 
-def clean_text(raw):
-    t = re.sub(r'<<<SCORES>>>[\s\S]*?<<<END>>>', '', raw)
-    t = re.sub(r'\{[\s\S]*?"bias_score"[\s\S]*?\}', '', t)
-    return t.strip()
 
-# ─── DATASET CLEANING (zelfde logica als notebook V03) ────────────────────────
-def clean_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    """Past dezelfde cleaning toe als Reuma_Enquete_Cleaning_V03.ipynb"""
-    df = df.copy()
+# ─────────────────────────────────────────────
+# PERSONA DATA (gebaseerd op notebook + ontwerp)
+# ─────────────────────────────────────────────
+PERSONAS = [
+    {
+        "id": 1,
+        "initials": "AJ",
+        "naam": "Alex Johnson",
+        "leeftijd": 52,
+        "geslacht": "Vrouw",
+        "diagnose": "Reumatoïde artritis",
+        "quote": "Ik wil mijn leven blijven leiden, maar de vermoeidheid maakt het moeilijk om te plannen of consistent te zijn.",
+        "tags": ["Vermoeidheid", "Pijnbeheer", "Zelfstandigheid", "Work-life balance"],
+        "context": "Werkt parttime en woont samen met partner",
+        "goals": "Actief blijven, onafhankelijkheid behouden",
+        "frustrations": "Onvoorspelbare vermoeidheid, beperkte energie",
+        "tech_support": "Gemiddeld",
+        "data_bronnen": ["ReumaNederland Interviews n=65", "Patiëntforum data", "Wetenschappelijke literatuur"],
+        "sleutelfactoren": ["Diagnose", "Leefstijl", "Emotionele impact"],
+        "xai_uitleg": "Gegenereerd op basis van patronen in de dataset. Vermoeidheid wordt vaak als uitdaging genoemd door vrouwen van 50+.",
+        "kwaliteit": "goed",  # voor validatie
+    },
+    {
+        "id": 2,
+        "initials": "TK",
+        "naam": "Thomas Kemp",
+        "leeftijd": 34,
+        "geslacht": "Man",
+        "diagnose": "Artritis psoriatica",
+        "quote": "Apps moeten gewoon werken. Ik heb geen tijd voor uitleg — geef me de info in 30 seconden.",
+        "tags": ["Efficiëntie", "Werk", "Digitaal vaardig", "Tijdgebrek"],
+        "context": "Fulltime werkend, druk gezinsleven met 2 kinderen",
+        "goals": "Snel toegang tot informatie, alles mobiel",
+        "frustrations": "Trage systemen, onnodige clicks, onduidelijke navigatie",
+        "tech_support": "Hoog",
+        "data_bronnen": ["ReumaNederland survey 2024", "Gebruikersinterviews n=12"],
+        "sleutelfactoren": ["Leefstijl", "Werkdruk"],
+        "xai_uitleg": "Technologisch vaardig profiel. Tijdschaarste is de dominante factor in dit persona.",
+        "kwaliteit": "goed",
+    },
+    {
+        "id": 3,
+        "initials": "FM",
+        "naam": "Fatima Mansour",
+        "leeftijd": 68,
+        "geslacht": "Vrouw",
+        "diagnose": "Artrose & fibromyalgie",
+        "quote": "Soms begrijp ik niet wat ze van me verwachten. Mijn dochter helpt me, maar ik wil dat zelf kunnen doen.",
+        "tags": ["Lage digitale geletterdheid", "Afhankelijkheid", "Taalbarrière", "Inclusie"],
+        "context": "Woont alleen, heeft informele zorger (dochter), spreekt Nederlands en Arabisch",
+        "goals": "Begrijpen wat er van haar verwacht wordt, meer zelfredzaamheid",
+        "frustrations": "Kleine tekst, onduidelijke iconen, medisch jargon",
+        "tech_support": "Laag",
+        "data_bronnen": ["ReumaNederland Interviews n=65", "Zorginstellingsdata", "Migranten gezondheidsonderzoek"],
+        "sleutelfactoren": ["Inclusie", "Taalvaardigheid", "Toegankelijkheid"],
+        "xai_uitleg": "Vertegenwoordigt een kwetsbare doelgroep. Laagdrempeligheid en toegankelijkheid zijn cruciaal.",
+        "kwaliteit": "goed",
+    },
+    {
+        "id": 4,
+        "initials": "PK",
+        "naam": "Pieter de Kruijk",
+        "leeftijd": 47,
+        "geslacht": "Man",
+        "diagnose": "Reumatoïde artritis (8 jaar)",
+        "quote": "Ik ben al 8 jaar patiënt. Ik weet meer over dit systeem dan sommige artsen.",
+        "tags": ["Ervaringsdeskundige", "Hoge betrokkenheid", "Systeem-kritisch", "Beleidsinteresse"],
+        "context": "Actief in patiëntenvereniging, schrijft ervaringsreviews online",
+        "goals": "Transparantie over behandelingen, invloed op zorgbeleid",
+        "frustrations": "Niet serieus genomen worden, gebrek aan co-creatie met patiënten",
+        "tech_support": "Hoog",
+        "data_bronnen": ["ReumaNederland community data", "Patiëntenpanel interviews"],
+        "sleutelfactoren": ["Ervaringsjaren", "Betrokkenheid", "Systemisch begrip"],
+        "xai_uitleg": "Expert-gebruikersprofiel met sterke mening over systeemintegriteit en transparantie.",
+        "kwaliteit": "goed",
+    },
+    {
+        "id": 5,
+        "initials": "??",
+        "naam": "Tech-savvy Millennial",
+        "leeftijd": 30,
+        "geslacht": "Onbekend",
+        "diagnose": "Niet gespecificeerd",
+        "quote": "Millennials gebruiken 73% vaker apps. Ze verwachten instant feedback.",
+        "tags": ["Vaag", "Stereotyp", "Hallucinatief", "Onvolledig"],
+        "context": "Niet gespecificeerd — te generiek profiel",
+        "goals": "Onbekend",
+        "frustrations": "Onbekend",
+        "tech_support": "Onbekend",
+        "data_bronnen": ["Onbekende bron (niet geverifieerd)", "Statistiek zonder referentie"],
+        "sleutelfactoren": ["Leeftijdsstereotyp"],
+        "xai_uitleg": "⚠️ Dit persona bevat mogelijk hallucinaties (73%-statistiek) en bias (leeftijdsstereotypering). Validatie aanbevolen.",
+        "kwaliteit": "slecht",  # triggers hogere foutscores
+    },
+]
 
-    # Verwijder metadata kolommen als die aanwezig zijn
-    for col in ['Start Date (UTC)', 'Response Type', '#']:
-        if col in df.columns:
-            df = df.drop(columns=[col])
 
-    # Leeftijd naar numeriek
-    age_col = next((c for c in df.columns if 'leeftijd' in c.lower()), None)
-    if age_col:
-        age_map = {'26 – 35':30.5,'36 – 45':40.5,'46 – 55':50.5,'56 – 65':60.5,'66 – 75':70.5,'> 75':80}
-        df[age_col] = df[age_col].map(lambda x: age_map.get(str(x).strip(), pd.to_numeric(x, errors='coerce')))
+# ─────────────────────────────────────────────
+# SCORE HULPFUNCTIES
+# ─────────────────────────────────────────────
+def score_kleur(score: int) -> str:
+    if score >= 80:
+        return "#1DB87A"  # groen
+    elif score >= 60:
+        return "#F59E0B"  # amber
+    return "#EF4444"  # rood
 
-    # Reumaduur naar numeriek
-    dur_col = next((c for c in df.columns if 'lang' in c.lower() and 'reuma' in c.lower()), None)
-    if dur_col:
-        dur_map = {'Ik heb geen reuma':0,'Korter dan 1 jaar':0.5,'1 - 5 jaar':3,'5 - 10 jaar':7.5,'Langer dan 10 jaar':15}
-        df[dur_col] = df[dur_col].map(lambda x: dur_map.get(str(x).strip(), pd.to_numeric(x, errors='coerce')))
 
-    return df
+def score_label(score: int) -> str:
+    if score >= 80:
+        return "Laag risico"
+    elif score >= 60:
+        return "Gemiddeld"
+    return "Hoog risico"
 
-# ─── DATASET ANALYSE → PERSONA GENERATIE ──────────────────────────────────────
-def dataset_summary(df: pd.DataFrame) -> str:
-    """Maak een compacte samenvatting van de dataset voor de LLM."""
-    lines = [f"Dataset: {len(df)} respondenten, {len(df.columns)} kolommen\n"]
 
-    # Kolommen tonen
-    lines.append("Kolommen: " + ", ".join(df.columns.tolist()[:20]))
+def badge_html(score: int, label: str, icon: str) -> str:
+    if score >= 80:
+        cls = "rel-badge-green"
+        prefix = "✓"
+    elif score >= 60:
+        cls = "rel-badge-amber"
+        prefix = "⚠"
+    else:
+        cls = "rel-badge-red"
+        prefix = "✗"
+    return f'<span class="{cls}">{prefix} {label} — {score_label(score)}</span>'
 
-    # Numerieke statistieken
-    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if num_cols:
-        lines.append("\nNumerieke kolommen (gemiddelde / mediaan / min / max):")
-        for col in num_cols[:8]:
-            vals = df[col].dropna()
-            if len(vals):
-                lines.append(f"  {col}: gem={vals.mean():.1f} | med={vals.median():.1f} | {vals.min():.0f}–{vals.max():.0f}")
 
-    # Categorische waarden (top 5 per kolom)
-    cat_cols = df.select_dtypes(include=['object']).columns.tolist()
-    if cat_cols:
-        lines.append("\nCategorische kolommen (top waarden):")
-        for col in cat_cols[:10]:
-            vc = df[col].value_counts().head(4)
-            if len(vc):
-                top = " | ".join([f"{v}({c})" for v, c in vc.items()])
-                lines.append(f"  {col}: {top}")
+def teken_score_ring(score: int, label: str = "Totaalscore"):
+    """SVG score-ring zoals in het ontwerp."""
+    kleur = score_kleur(score)
+    circumference = 2 * 3.14159 * 45
+    offset = circumference * (1 - score / 100)
+    svg = f"""
+    <div style="display:flex;flex-direction:column;align-items:center;padding:14px 0">
+      <svg width="110" height="110" viewBox="0 0 110 110">
+        <circle cx="55" cy="55" r="45" fill="none" stroke="#253047" stroke-width="9"/>
+        <circle cx="55" cy="55" r="45" fill="none" stroke="{kleur}" stroke-width="9"
+                stroke-dasharray="{circumference:.1f}" stroke-dashoffset="{offset:.1f}"
+                stroke-linecap="round" transform="rotate(-90 55 55)"/>
+        <text x="55" y="60" text-anchor="middle" font-size="20" font-weight="700"
+              fill="#F1F5F9" font-family="Inter,sans-serif">{score}%</text>
+      </svg>
+      <div style="font-size:12px;color:{kleur};font-weight:600;margin-top:4px">
+        {score_label(score)}
+      </div>
+      <div style="font-size:10px;color:#8B9CB8;margin-top:2px">{label}</div>
+    </div>
+    """
+    return svg
 
-    return "\n".join(lines)
 
-def generate_personas_from_data(df: pd.DataFrame, n_personas: int = 4) -> list[dict]:
-    """Gebruik Claude om persona's te genereren op basis van de dataset."""
-    summary = dataset_summary(df)
+# ─────────────────────────────────────────────
+# PERSONA KAART HTML
+# ─────────────────────────────────────────────
+def render_persona_card(p: dict) -> str:
+    tags_html = "".join([f'<span class="pc-tag">{t}</span>' for t in p["tags"]])
+    bronnen_html = "".join([f'<div class="xai-source">{b}</div>' for b in p["data_bronnen"]])
+    factoren_html = "".join([f'<span class="xai-badge">{f}</span>' for f in p["sleutelfactoren"]])
+    warn = "⚠️ " if p["kwaliteit"] == "slecht" else ""
 
-    prompt = f"""Je bent een Data Justice onderzoeker. Analyseer deze enquêtedata van ReumaNederland en genereer {n_personas} realistische, diverse synthetic user persona's.
+    return f"""
+    <div class="persona-card">
+      <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:14px">
+        <div style="width:64px;height:64px;border-radius:10px;background:#1f2d47;border:1px solid #2E3D5A;
+                    display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;
+                    color:#5B9BFF;flex-shrink:0">{warn}{p["initials"]}</div>
+        <div style="flex:1">
+          <div class="pc-name">{p["naam"]}</div>
+          <div class="pc-diag">{p["geslacht"]} · {p["diagnose"]}</div>
+          <div class="pc-quote">"{p["quote"]}"</div>
+          <div>{tags_html}</div>
+        </div>
+        <div class="pc-age">{p["leeftijd"]} jr</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:12px;border-top:1px solid #253047">
+        <div style="display:flex;gap:8px"><span class="pc-det-label">📋 Context</span><span class="pc-det-val">{p["context"]}</span></div>
+        <div style="display:flex;gap:8px"><span class="pc-det-label">🎯 Goals</span><span class="pc-det-val">{p["goals"]}</span></div>
+        <div style="display:flex;gap:8px"><span class="pc-det-label">⚡ Frustraties</span><span class="pc-det-val">{p["frustrations"]}</span></div>
+        <div style="display:flex;gap:8px"><span class="pc-det-label">💻 Tech</span><span class="pc-det-val">{p["tech_support"]}</span></div>
+      </div>
+    </div>
+    <div class="xai-box">
+      <div class="xai-title">▼ Why was this created this way? <span class="xai-accent">(Explainable AI)</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:10px;color:#8B9CB8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Top databronnen</div>
+          {bronnen_html}
+        </div>
+        <div>
+          <div style="font-size:10px;color:#8B9CB8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Sleutelfactoren</div>
+          {factoren_html}
+        </div>
+        <div>
+          <div style="font-size:10px;color:#8B9CB8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Uitleg</div>
+          <div class="xai-expl">{p["xai_uitleg"]}</div>
+        </div>
+      </div>
+    </div>
+    """
 
-DATASET SAMENVATTING:
-{summary}
 
-EERSTE 5 RIJEN (steekproef):
-{df.head(5).to_string()}
+# ─────────────────────────────────────────────
+# GROQ API — SYNTHETIC USER + SCORE GENERATIE
+# ─────────────────────────────────────────────
+def bouw_systeem_prompt(p: dict) -> str:
+    kwaliteit_instructie = ""
+    if p["kwaliteit"] == "slecht":
+        kwaliteit_instructie = """
+EXTRA INSTRUCTIE: Dit is een slecht opgesteld persona vol stereotypen en ontbrekende info.
+Reageer vager, gebruik soms onbewezen claims, en wees minder specifiek.
+Dit reflecteert een lage kwaliteitspersona — de scores moeten dit weerspiegelen."""
 
-Genereer {n_personas} persona's die de diversiteit in de dataset weerspiegelen (leeftijd, reumaduur, digitale vaardigheid, behoeften). Let op inclusie en vermijd stereotypen.
+    return f"""Je bent een cognitieve synthetic user agent genaamd "{p["naam"]}".
 
-Geef ALLEEN geldig JSON terug, geen uitleg erbuiten:
-{{
-  "personas": [
-    {{
-      "naam": "...",
-      "age": <getal>,
-      "initials": "<2 letters>",
-      "geslacht": "...",
-      "diagnose": "...",
-      "context": "...",
-      "doelen": "...",
-      "frustraties": "...",
-      "tech": "Laag|Gemiddeld|Hoog|Expert",
-      "quote": "...",
-      "tags": ["...", "...", "..."],
-      "kenmerken": ["...", "...", "..."],
-      "factoren": ["...", "...", "..."],
-      "uitleg": "...",
-      "data_basis": "Gebaseerd op [X] respondenten met vergelijkbaar profiel in de dataset."
-    }}
-  ]
-}}"""
+PERSONA PROFIEL:
+- Naam: {p["naam"]}
+- Leeftijd: {p["leeftijd"]} jaar
+- Geslacht: {p["geslacht"]}
+- Diagnose: {p["diagnose"]}
+- Kernquote: "{p["quote"]}"
+- Dagelijkse context: {p["context"]}
+- Doelen: {p["goals"]}
+- Frustraties: {p["frustrations"]}
+- Tech-comfort: {p["tech_support"]}
+- Kernthema's: {", ".join(p["tags"])}
+{kwaliteit_instructie}
 
-    if "groq_api_key" not in st.session_state or not st.session_state.groq_api_key:
-        raise ValueError("Groq API key ontbreekt. Vul deze in de zijbalk in.")
-        
-    client = Groq(api_key=st.session_state.groq_api_key)
-    resp = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = resp.choices[0].message.content
-    # JSON extraheren
-    m = re.search(r'\{[\s\S]*\}', raw)
-    if m:
-        data = json.loads(m.group(0))
-        return data.get("personas", [])
-    return []
-
-# ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
-def build_prompt(p: dict, mood: str, dataset_context: str = "") -> str:
-    dc = f"\nRELEVANTE DATA UIT DE DATASET:\n{dataset_context}\n" if dataset_context else ""
-    return f"""Je bent een Synthetic User — een cognitieve agent die volledig in-character reageert als de persona hieronder. Je bent GEEN assistent; je bent {p['naam']}.
-
-PERSONA: {p['naam']}, {p['age']}jr, {p['geslacht']}
-Diagnose: {p['diagnose']} | Context: {p['context']}
-Doelen: {p['doelen']} | Frustraties: {p['frustraties']}
-Tech-vaardigheid: {p['tech']} | Huidige stemming: {mood}
-Quote: "{p['quote']}"
-{dc}
 GEDRAGSREGELS:
-- Reageer altijd in de eerste persoon als {p['naam']}
-- Laat stemming "{mood}" doorklinken in toon en woordkeuze
-- Baseer je antwoorden op echte ervaringen die passen bij de dataset
-- Antwoord in het Nederlands (of Engels als de vraag in het Engels is)
-- Reageer als een echte persoon, geen lijstjes
+1. Spreek ALTIJD in de eerste persoon als {p["naam"]}
+2. Reageer authentiek vanuit dit persona — niet als AI
+3. Noem specifieke ervaringen passend bij de aandoening
+4. Wees eerlijk over frustraties met technologie indien relevant
+5. Houd antwoorden beknopt (2-4 zinnen) tenzij anders gevraagd
+6. Gebruik het taalregister van dit persona (leeftijd, opleiding, context)
 
-BIAS-JUSTICE VALIDATIE (notebook JasmijnPelle_bias_justice_personas):
-Voeg na elk antwoord dit blok toe:
-<<<SCORES>>>
-{{"bias_score": <0-100>, "hallucination_score": <0-100>, "inclusie_score": <0-100>, "bias_toelichting": "<1 zin>", "hallucinatie_toelichting": "<1 zin>", "inclusie_toelichting": "<1 zin>"}}
-<<<END>>>
+VERPLICHT NA ELK ANTWOORD:
+Voeg op een aparte laatste regel exact dit toe:
+SCORES:{{"bias":{{}}, "hallucinaties":{{}}, "inclusie":{{}}}}
 
-Scoreschaal: 81-100=groen(goed) | 71-80=geel(aandacht) | 0-70=rood(problematisch). Hogere score = beter."""
+Waarbij je de getallen invult (0-100, waarbij 100 = geen probleem):
+- bias: Mate van stereotypering of vooringenomenheid in jouw respons (100 = volledig onbevooroordeeld)
+- hallucinaties: Feitelijke nauwkeurigheid en gronding in de persona (100 = volledig accuraat)
+- inclusie: Hoe goed dit persona een diverse doelgroep representeert (100 = uitstekend inclusief)
 
-# ─── SESSION STATE ────────────────────────────────────────────────────────────
-defaults = {
-    "messages": [], "scores_hist": [], "latest_scores": None,
-    "personas": [], "active_persona_idx": 0,
-    "mood": "Curious", "df": None, "dataset_name": "",
-    "generating": False,
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+Voorbeeld: SCORES:{{"bias": 88, "hallucinaties": 75, "inclusie": 82}}
+"""
 
-MOODS = ["Curious", "Confused", "Distrust", "Frustrated", "Hopeful", "Overstimulated"]
 
-# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### ⚖ Data Justice Assistent")
-    st.markdown("---")
-    
-    st.markdown("**🔑 API Instellingen**")
-    api_key = st.text_input("Groq API Key", type="password", placeholder="gsk_...", value=st.session_state.get("groq_api_key", ""))
-    if api_key:
-        st.session_state.groq_api_key = api_key
-    st.markdown("---")
+def vraag_groq(client, persona: dict, vraag: str, geschiedenis: list) -> dict:
+    """Stel vraag aan Groq en parseer antwoord + scores."""
+    systeem = bouw_systeem_prompt(persona)
 
-    # ── Dataset upload ──
-    st.markdown("**📂 Jouw dataset**")
-    uploaded = st.file_uploader(
-        "Upload cleaned_reuma_enquete_V03.csv",
-        type=["csv", "xlsx"],
-        label_visibility="collapsed",
-        help="Upload het gecleande CSV-bestand uit jouw notebook",
-    )
+    berichten = [{"role": "system", "content": systeem}]
+    for msg in geschiedenis[-16:]:  # max context
+        berichten.append(msg)
+    berichten.append({"role": "user", "content": vraag})
 
-    if uploaded:
-        try:
-            if uploaded.name.endswith(".xlsx"):
-                df = pd.read_excel(uploaded)
-            else:
-                df = pd.read_csv(uploaded, low_memory=False)
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=berichten,
+            temperature=0.75,
+            max_tokens=700,
+        )
+        volledig = response.choices[0].message.content.strip()
 
-            df = clean_dataset(df)
-            st.session_state.df           = df
-            st.session_state.dataset_name = uploaded.name
+        # Parseer scores
+        scores = {"bias": 75, "hallucinaties": 70, "inclusie": 65}
+        import re
+        match = re.search(r'SCORES:\s*(\{[^}]+\})', volledig)
+        if match:
+            try:
+                raw = match.group(1)
+                # Vervang Nederlandse sleutels indien nodig
+                parsed = json.loads(raw)
+                for k in ["bias", "hallucinaties", "inclusie"]:
+                    if k in parsed and isinstance(parsed[k], (int, float)):
+                        scores[k] = int(parsed[k])
+            except Exception:
+                pass
 
-            st.success(f"✓ {len(df)} rijen · {len(df.columns)} kolommen geladen")
+        # Verwijder scores-regel uit antwoord
+        schoon = re.sub(r'\nSCORES:\s*\{[^}]+\}', '', volledig).strip()
+        schoon = re.sub(r'SCORES:\s*\{[^}]+\}', '', schoon).strip()
 
-            with st.expander("Kolommen preview"):
-                st.dataframe(df.head(3), use_container_width=True)
+        totaal = round((scores["bias"] + scores["hallucinaties"] + scores["inclusie"]) / 3)
 
-        except Exception as e:
-            st.error(f"Fout bij laden: {e}")
+        return {
+            "tekst": schoon,
+            "scores": {**scores, "totaal": totaal},
+            "succes": True,
+        }
 
-    if st.session_state.df is not None:
-        n = st.slider("Aantal persona's genereren", 2, 6, 4)
-        if st.button("🔄 Genereer persona's uit dataset", use_container_width=True):
-            with st.spinner("Claude analyseert jouw data en genereert persona's…"):
-                try:
-                    personas = generate_personas_from_data(st.session_state.df, n_personas=n)
-                    if personas:
-                        st.session_state.personas         = personas
-                        st.session_state.active_persona_idx = 0
-                        st.session_state.messages         = []
-                        st.session_state.scores_hist      = []
-                        st.session_state.latest_scores    = None
-                        st.success(f"✓ {len(personas)} persona's gegenereerd!")
-                        st.rerun()
-                    else:
-                        st.error("Geen persona's gegenereerd. Controleer de API-key.")
-                except Exception as e:
-                    st.error(f"Fout: {e}")
+    except Exception as e:
+        return {
+            "tekst": f"❌ Groq API fout: {str(e)}",
+            "scores": {"bias": 0, "hallucinaties": 0, "inclusie": 0, "totaal": 0},
+            "succes": False,
+        }
 
-    st.markdown("---")
 
-    # ── Persona selectie ──
-    if st.session_state.personas:
-        st.markdown("**Persona's**")
-        st.markdown('<div style="font-size:11px;color:#3b82f6;margin-bottom:6px;">Gegenereerd uit jouw dataset</div>', unsafe_allow_html=True)
+# ─────────────────────────────────────────────
+# SESSION STATE INIT
+# ─────────────────────────────────────────────
+if "actieve_persona_id" not in st.session_state:
+    st.session_state.actieve_persona_id = 1
+if "chatgeschiedenis" not in st.session_state:
+    st.session_state.chatgeschiedenis = []
+if "api_berichten" not in st.session_state:
+    st.session_state.api_berichten = []
+if "scores" not in st.session_state:
+    st.session_state.scores = {"bias": 85, "hallucinaties": 62, "inclusie": 55, "totaal": 67}
+if "persona_kaart_getoond" not in st.session_state:
+    st.session_state.persona_kaart_getoond = False
+if "groq_api_key_input" not in st.session_state:
+    st.session_state.groq_api_key_input = ""
+if "rapport_open" not in st.session_state:
+    st.session_state.rapport_open = False
+if "berichtentelling" not in st.session_state:
+    st.session_state.berichtentelling = 0
 
-        for i, p in enumerate(st.session_state.personas):
-            is_active = i == st.session_state.active_persona_idx
-            bg     = "#0f1c30" if is_active else "transparent"
-            border = "#3b82f655" if is_active else "#1a2d45"
-            if st.button(
-                f"{'▶ ' if is_active else ''}{p['naam']} · {p['age']}jr",
-                key=f"p_{i}",
-                use_container_width=True,
-            ):
-                if i != st.session_state.active_persona_idx:
-                    st.session_state.active_persona_idx = i
-                    st.session_state.messages           = []
-                    st.session_state.scores_hist        = []
-                    st.session_state.latest_scores      = None
-                    st.rerun()
-    else:
-        st.markdown('<div style="color:#3d5a78;font-size:12px;padding:8px 0;">⬆ Upload een dataset en genereer persona\'s</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.session_state.mood = st.selectbox("🎭 Mood checker", MOODS, index=MOODS.index(st.session_state.mood))
+def get_actieve_persona():
+    return next(p for p in PERSONAS if p["id"] == st.session_state.actieve_persona_id)
 
-    st.markdown("---")
-    st.markdown("""
-    <div style="display:flex;align-items:center;gap:8px;">
-        <div style="width:28px;height:28px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">DS</div>
-        <div><div style="font-size:12px;color:#f0f4f8;">Designer</div><div style="font-size:11px;color:#6b8aaa;">Greenberry</div></div>
-    </div>
-    """, unsafe_allow_html=True)
 
-# ─── MAIN ─────────────────────────────────────────────────────────────────────
+def wissel_persona(persona_id: int):
+    if persona_id != st.session_state.actieve_persona_id:
+        st.session_state.actieve_persona_id = persona_id
+        st.session_state.chatgeschiedenis = []
+        st.session_state.api_berichten = []
+        st.session_state.persona_kaart_getoond = False
+        st.session_state.berichtentelling = 0
+        st.session_state.scores = {"bias": 85, "hallucinaties": 62, "inclusie": 55, "totaal": 67}
 
-# Top bar
-col_t, col_m, col_e = st.columns([4, 1.5, 1])
-with col_t:
-    ds_name = st.session_state.dataset_name or "Geen dataset geladen"
-    st.markdown(f"""
-    <div>
-        <div style="font-size:18px;font-weight:700;color:#3b82f6;">ReumaNederland Project</div>
-        <div style="font-size:11px;color:#6b8aaa;">🗄 {ds_name} · Team 3</div>
-    </div>
-    """, unsafe_allow_html=True)
-with col_m:
-    st.markdown(f'<div style="padding-top:8px;font-size:12px;color:#6b8aaa;">Stemming: <span style="color:#b0c4dc;">{st.session_state.mood}</span></div>', unsafe_allow_html=True)
-with col_e:
-    st.button("↑ Export", use_container_width=True)
 
-st.markdown("---")
-
-# ── Geen persona's: welkomstscherm ──
-if not st.session_state.personas:
-    st.markdown("""
-    <div style="padding: 40px 20px; min-height: 70vh;">
-        <h1 style="font-size: 3.8rem; color: #7B9AF5; font-family: 'Times New Roman', serif; margin-bottom: 10px; line-height: 1.1;">
-            Synthetic User and<br>Data Justice Assistent
-        </h1>
-        <p style="color: #6b8aaa; font-size: 1.1rem; max-width: 600px; margin-bottom: 50px;">
-            Genereer synthetische respondenten op basis van jouw data. Track live bias, hallucinatie en data justice scores.
-        </p>
-        
-        <div style="margin-top: 50px; max-width: 800px;">
-            <p style="color: #b0c4dc; font-size: 0.85rem; margin-bottom: 8px;">Ask the Synthetic User</p>
-            <div style="display: flex; gap: 15px; align-items: center;">
-                <span style="font-size: 32px; color: #5B7AFA; font-weight: bold;">+</span>
-                <div style="flex: 1; background: #ffffff; padding: 12px 20px; border-radius: 8px; color: #999;">
-                    Upload een dataset in de zijbalk en genereer persona's...
-                </div>
-                <button disabled style="background: #5B7AFA; color: white; border: none; padding: 14px 30px; border-radius: 8px; font-weight: bold; cursor: not-allowed; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 16px;">✈</span> Send
-                </button>
-            </div>
-        </div>
-        
-        <div style="display: flex; gap: 20px; margin-top: 100px; padding: 25px; background: rgba(11, 20, 34, 0.7); border: 1px solid #1a2d45; border-radius: 12px; max-width: 900px; backdrop-filter: blur(10px);">
-            <div style="display: flex; gap: 15px; align-items: center; flex: 1;">
-                <div style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid #5B7AFA; display: flex; align-items: center; justify-content: center; color: #5B7AFA; font-size: 18px;">
-                    👤
-                </div>
-                <div>
-                    <div style="font-size: 0.95rem; color: #f0f4f8; font-weight: 600;">Diverse Perspectives</div>
-                    <div style="font-size: 0.8rem; color: #6b8aaa; margin-top: 2px;">Engage synthetic users to explore multiple viewpoints</div>
-                </div>
-            </div>
-            <div style="width: 1px; background: #1a2d45; margin: 0 10px;"></div>
-            <div style="display: flex; gap: 15px; align-items: center; flex: 1;">
-                <div style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid #1D9E75; display: flex; align-items: center; justify-content: center; color: #1D9E75; font-size: 18px;">
-                    🛡
-                </div>
-                <div>
-                    <div style="font-size: 0.95rem; color: #f0f4f8; font-weight: 600;">Transparent Insights</div>
-                    <div style="font-size: 0.8rem; color: #6b8aaa; margin-top: 2px;">Real-time reliability indicators help you evaluate with confidence</div>
-                </div>
-            </div>
-            <div style="width: 1px; background: #1a2d45; margin: 0 10px;"></div>
-            <div style="display: flex; gap: 15px; align-items: center; flex: 1;">
-                <div style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid #5B7AFA; display: flex; align-items: center; justify-content: center; color: #5B7AFA; font-size: 18px;">
-                    🔍
-                </div>
-                <div>
-                    <div style="font-size: 0.95rem; color: #f0f4f8; font-weight: 600;">Organized Research</div>
-                    <div style="font-size: 0.8rem; color: #6b8aaa; margin-top: 2px;">Keep projects structured and findings export ready</div>
-                </div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.stop()
-
-# ── Actieve persona ──
-p = st.session_state.personas[st.session_state.active_persona_idx]
-
-# ── Persona kaart ──
-with st.expander(f"👤 {p['naam']} — {p['diagnose']}", expanded=len(st.session_state.messages) == 0):
-    col_av, col_info, col_grid = st.columns([1, 2.5, 2.5])
-    with col_av:
-        st.markdown(f"""
-        <div style="width:70px;height:70px;border-radius:10px;background:linear-gradient(135deg,#1a3a5c,#0d4a38);
-             display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#5DCAA5;">
-             {p.get('initials','??')}
-        </div>""", unsafe_allow_html=True)
-    with col_info:
-        tags_html = "".join(f'<span class="tag">{t}</span>' for t in p.get('tags', []))
-        st.markdown(f"""
-        <div style="font-size:16px;font-weight:700;color:#f0f4f8;">{p['naam']}
-            <span style="font-size:12px;background:#132238;color:#6b8aaa;padding:2px 8px;border-radius:12px;border:1px solid #1a2d45;">{p['age']} yrs</span>
-        </div>
-        <div style="font-size:12px;color:#1D9E75;margin-bottom:6px;">{p['geslacht']} · <span style="color:#e57373;">{p['diagnose']}</span></div>
-        <div style="font-size:12px;color:#6b8aaa;font-style:italic;margin-bottom:8px;">"{p.get('quote','')}"</div>
-        {tags_html}
-        """, unsafe_allow_html=True)
-    with col_grid:
-        for icon, label, key in [("📋","Context","context"),("🎯","Doelen","doelen"),("⚡","Frustraties","frustraties"),("💻","Tech",  "tech")]:
-            st.markdown(f"""
-            <div style="display:flex;gap:8px;margin-bottom:5px;">
-                <span style="color:#6b8aaa;font-size:12px;min-width:100px;">{icon} {label}</span>
-                <span style="font-size:12px;color:#b0c4dc;">{p.get(key,'')}</span>
-            </div>""", unsafe_allow_html=True)
-
-    # Data basis badge
-    if p.get("data_basis"):
-        st.markdown(f'<div style="font-size:11px;color:#3b82f6;margin-top:8px;">📊 {p["data_basis"]}</div>', unsafe_allow_html=True)
-
-    # Explainable AI
-    factoren_html = "".join(f'<span class="tag">{f}</span>' for f in p.get('factoren', []))
-    st.markdown(f"""
-    <div class="xai-block">
-        <div style="font-size:12px;font-weight:600;color:#b0c4dc;margin-bottom:8px;">
-            ▼ Why was this created this way? <span style="color:#3b82f6;">Explainable AI</span> ⓘ
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-            <div>
-                <div style="font-size:11px;color:#6b8aaa;margin-bottom:4px;font-weight:600;">Data bron</div>
-                <div style="font-size:11px;color:#b0c4dc;">• {st.session_state.dataset_name}<br>• {len(st.session_state.df)} respondenten</div>
-            </div>
-            <div>
-                <div style="font-size:11px;color:#6b8aaa;margin-bottom:6px;font-weight:600;">Key factors</div>
-                {factoren_html}
-            </div>
-            <div>
-                <div style="font-size:11px;color:#6b8aaa;margin-bottom:4px;font-weight:600;">Explanation</div>
-                <div style="font-size:11px;color:#b0c4dc;line-height:1.5;">{p.get('uitleg','')}</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ── Dataset context voor chat ──
-def get_dataset_context(df: pd.DataFrame, p: dict) -> str:
-    """Haal relevante rijen op die passen bij de persona."""
-    if df is None or df.empty:
-        return ""
-    age_col = next((c for c in df.columns if 'leeftijd' in c.lower()), None)
-    sample = df
-    if age_col:
-        try:
-            sample = df[(df[age_col] >= p['age'] - 15) & (df[age_col] <= p['age'] + 15)].head(5)
-            if sample.empty:
-                sample = df.head(5)
-        except:
-            sample = df.head(5)
-    else:
-        sample = df.head(5)
-    return f"Vergelijkbare respondenten uit de dataset (steekproef {len(sample)} rijen):\n{sample.to_string()}"
-
-# ── Chat ──
-time_str = datetime.now().strftime("%H:%M")
-st.markdown(f"""
-<div class="msg-meta">{time_str}</div>
-<div class="assistant-msg">⚖ Hi! Ik ben {p['naam']}. Stel me gerust een vraag over mijn ervaringen met {p['diagnose']}.</div>
+# ─────────────────────────────────────────────
+# TOPBAR
+# ─────────────────────────────────────────────
+st.markdown("""
+<div class="topbar">
+  <div class="topbar-logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="6" fill="#1a4fa0"/>
+      <path d="M6 8h16M6 12h12M6 16h16M6 20h12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    Data Justice Assistent
+  </div>
+  <div style="margin-left:12px">
+    <div class="topbar-project">ReumaNederland Project</div>
+    <div class="topbar-sub">📚 ReumaNederland · Team 3</div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+    <span style="font-size:11px;color:#8B9CB8;background:#1a2438;border:1px solid #253047;border-radius:8px;padding:5px 12px">
+      ⚖️ Mood checker
+    </span>
+    <span style="font-size:11px;color:#8B9CB8;background:#1a2438;border:1px solid #253047;border-radius:8px;padding:5px 12px">
+      📋 Assign project
+    </span>
+    <span style="font-size:11px;color:white;background:#3B7EF6;border-radius:8px;padding:5px 14px;font-weight:600">
+      ↑ Export
+    </span>
+  </div>
+</div>
 """, unsafe_allow_html=True)
 
-for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(f"""
-        <div style="text-align:right;">
-            <div class="msg-meta" style="text-align:right;">{time_str} DS</div>
-            <div class="user-msg">{msg['content']}</div>
-        </div>""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────
+# SIDEBAR
+# ─────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## ⚖️ Data Justice Assistent")
+    st.markdown("---")
+
+    # API key invoer
+    st.markdown("### 🔑 Groq API Key")
+    api_key_input = st.text_input(
+        "API Key",
+        type="password",
+        value=st.session_state.groq_api_key_input,
+        placeholder="gsk_...",
+        label_visibility="collapsed",
+    )
+    if api_key_input:
+        st.session_state.groq_api_key_input = api_key_input
+
+    client = get_groq_client()
+    if client:
+        st.markdown('<span style="color:#1DB87A;font-size:11px">✓ Groq verbonden (llama-3.3-70b)</span>', unsafe_allow_html=True)
     else:
-        st.markdown(f"""
-        <div class="msg-meta">{time_str} <b>Synthetic User</b> · Gebaseerd op {st.session_state.dataset_name}</div>
-        <div class="assistant-msg">⚖ {msg['content']}</div>
-        """, unsafe_allow_html=True)
-        if msg.get("scores"):
-            sc = msg["scores"]
+        st.markdown('<span style="color:#F59E0B;font-size:11px">⚠ Voer een Groq API key in</span>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Persona selectie
+    st.markdown("### 👤 Persona's")
+    st.markdown('<span style="font-size:10px;color:#8B9CB8">Research · ReumaNederland</span>', unsafe_allow_html=True)
+
+    for p in PERSONAS:
+        is_actief = p["id"] == st.session_state.actieve_persona_id
+        kwaliteitskleur = "#EF4444" if p["kwaliteit"] == "slecht" else "#3B7EF6"
+        rand_stijl = "rgba(59,126,246,.4)" if is_actief else "transparent"
+        achtergrond = "rgba(59,126,246,.1)" if is_actief else "transparent"
+
+        col_btn, _ = st.columns([1, 0.01])
+        with col_btn:
+            if st.button(
+                f"{'✦ ' if is_actief else '  '}{p['naam']}  ·  {p['leeftijd']}jr",
+                key=f"persona_btn_{p['id']}",
+                use_container_width=True,
+            ):
+                wissel_persona(p["id"])
+                st.rerun()
+
+    st.markdown("---")
+
+    col_edit, col_gen = st.columns(2)
+    with col_edit:
+        st.button("✏️ Edit", use_container_width=True)
+    with col_gen:
+        st.button("✨ Genereer", use_container_width=True)
+
+    st.markdown("---")
+
+    # Dataset
+    st.markdown("### 🗃 Dataset")
+    st.markdown("""
+    <div style="background:#1a2438;border:1px solid #253047;border-radius:8px;
+                padding:8px 12px;font-size:12px;color:#8B9CB8;margin-bottom:8px;display:flex;gap:8px">
+      🗄 Dataset_ReumaNederland
+    </div>
+    """, unsafe_allow_html=True)
+    st.button("📝 Edit Dataset", use_container_width=True)
+
+    st.markdown("---")
+
+    # Projecten
+    st.markdown("### 📂 Projects")
+    for proj in ["ReumaNederland", "Project 1", "Project 3"]:
+        actief_proj = proj == "ReumaNederland"
+        st.markdown(
+            f'<div style="padding:6px 10px;border-radius:7px;font-size:12px;'
+            f'background:{"rgba(59,126,246,.08)" if actief_proj else "transparent"};'
+            f'color:{"#F1F5F9" if actief_proj else "#8B9CB8"};margin-bottom:3px">'
+            f'📋 {proj}</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+
+    # Rapport knop
+    if st.button("📊 Bekijk Validatierapport", use_container_width=True):
+        st.session_state.rapport_open = not st.session_state.rapport_open
+
+    st.markdown("---")
+    st.markdown(
+        '<div style="font-size:11px;color:#8B9CB8">👤 Designer · Greenberry<br>'
+        '<span style="color:#3B7EF6">Groq llama-3.3-70b-versatile</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ─────────────────────────────────────────────
+# RAPPORT PANEEL (als uitgeklapt)
+# ─────────────────────────────────────────────
+actieve_p = get_actieve_persona()
+scores = st.session_state.scores
+
+if st.session_state.rapport_open:
+    st.markdown("---")
+    st.markdown("### 📊 Validation & Risk Overview")
+
+    col_ring, col_checks, col_verbeter = st.columns([1, 1.5, 1.5])
+
+    with col_ring:
+        st.markdown(teken_score_ring(scores["totaal"], "Totaalscore"), unsafe_allow_html=True)
+
+    with col_checks:
+        st.markdown("**Checks**")
+        for naam, key in [("Bias check", "bias"), ("Hallucinatie check", "hallucinaties"), ("Data Justice check", "inclusie")]:
+            s = scores[key]
+            kleur = score_kleur(s)
+            lbl = score_label(s)
             st.markdown(
-                pill_html("Bias", sc["bias_score"]) + " " +
-                pill_html("Hallucinatie", sc["hallucination_score"]) + " " +
-                pill_html("Data Justice", sc["inclusie_score"]),
+                f'<div style="display:flex;justify-content:space-between;padding:8px 0;'
+                f'border-bottom:1px solid #253047;font-size:12px">'
+                f'<span style="color:#8B9CB8">{naam}</span>'
+                f'<span style="color:{kleur};font-weight:600">{s}% — {lbl}</span></div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown(
+            f'<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:12px">'
+            f'<span style="color:#8B9CB8">Totaalscore</span>'
+            f'<span style="color:{score_kleur(scores["totaal"])};font-weight:700">{scores["totaal"]}%</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    with col_verbeter:
+        st.markdown("**Verbeter AI input**")
+        verbeterpunten = [
+            ("📋 Voeg context toe", "Verbeter relevantie"),
+            ("🔑 Verfijn prompt", "Betere resultaten"),
+            ("📋 Check datakwaliteit", "Review dataset"),
+            ("⚠ Meld een probleem", "Help ons verbeteren"),
+        ]
+        for naam, actie in verbeterpunten:
+            st.markdown(
+                f'<div style="display:flex;justify-content:space-between;padding:7px 0;'
+                f'border-bottom:1px solid #253047;font-size:11px">'
+                f'<span style="color:#F1F5F9">{naam}</span>'
+                f'<span style="color:#8B9CB8">{actie}</span></div>',
                 unsafe_allow_html=True,
             )
 
+    col_fix, col_export = st.columns(2)
+    with col_fix:
+        st.button("🔧 Fix issues", use_container_width=True)
+    with col_export:
+        if st.button("📤 Export rapport", use_container_width=True):
+            rapport_data = {
+                "persona": actieve_p["naam"],
+                "scores": st.session_state.scores,
+                "chatgeschiedenis": st.session_state.chatgeschiedenis,
+            }
+            st.download_button(
+                "⬇ Download JSON",
+                data=json.dumps(rapport_data, indent=2, ensure_ascii=False),
+                file_name=f"data_justice_rapport_{actieve_p['naam'].replace(' ', '_')}.json",
+                mime="application/json",
+            )
+    st.markdown("---")
+
+
+# ─────────────────────────────────────────────
+# CHAT WEERGAVE
+# ─────────────────────────────────────────────
+chat_container = st.container()
+
+with chat_container:
+    for bericht in st.session_state.chatgeschiedenis:
+        if bericht["rol"] == "assistent":
+            st.markdown(f"""
+            <div class="msg-wrap-bot">
+              <div class="msg-time">{bericht.get("tijd", "")}</div>
+              <div class="msg-sender">🤖 Synthetic User · {actieve_p["naam"]}</div>
+              <div class="bubble-bot">{bericht["inhoud"]}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if bericht.get("toon_persona_kaart"):
+                st.markdown(render_persona_card(actieve_p), unsafe_allow_html=True)
+
+        elif bericht["rol"] == "gebruiker":
+            st.markdown(f"""
+            <div class="msg-wrap-user">
+              <div class="msg-time">{bericht.get("tijd", "")}</div>
+              <div class="bubble-user">{bericht["inhoud"]}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        elif bericht["rol"] == "systeem":
+            st.markdown(f"""
+            <div class="msg-wrap-bot">
+              <div class="msg-sender">⚖️ Data Justice Assistent</div>
+              <div class="bubble-bot">{bericht["inhoud"]}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+# Welkomstbericht bij lege chat
+if not st.session_state.chatgeschiedenis:
+    st.markdown(f"""
+    <div class="msg-wrap-bot">
+      <div class="msg-time">Nu</div>
+      <div class="msg-sender">⚖️ Data Justice Assistent</div>
+      <div class="bubble-bot">
+        Hallo! Ik ben de <strong>Data Justice Assistent</strong>.<br><br>
+        Actieve synthetic user: <strong>{actieve_p["naam"]}</strong> ({actieve_p["leeftijd"]}jr, {actieve_p["diagnose"]}).<br><br>
+        Stel een vraag om de conversatie te starten. Elk antwoord wordt real-time geëvalueerd op
+        <strong>bias</strong>, <strong>hallucinaties</strong> en <strong>inclusie</strong>.
+        {'<br><br>⚠️ <span style="color:#F59E0B">Let op: dit persona heeft bekende kwaliteitsproblemen — ideaal om bias-detectie te testen!</span>' if actieve_p["kwaliteit"] == "slecht" else ""}
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
+# RELIABILITY BAR
+# ─────────────────────────────────────────────
+def render_reliability_bar(scores: dict) -> str:
+    b, h, i = scores["bias"], scores["hallucinaties"], scores["inclusie"]
+
+    def badge(s, lbl):
+        if s >= 80:
+            return f'<span class="rel-badge-green">✓ {lbl} — Laag</span>'
+        elif s >= 60:
+            return f'<span class="rel-badge-amber">⚠ {lbl} — Medium</span>'
+        return f'<span class="rel-badge-red">✗ {lbl} — Hoog</span>'
+
+    return f"""
+    <div class="rel-bar">
+      <span class="rel-label">ⓘ Reliability:</span>
+      {badge(h, "Hallucinaties")}
+      {badge(b, "Bias")}
+      {badge(i, "Data Justice")}
+      <span style="margin-left:auto;font-size:11px;color:#3B7EF6;cursor:pointer">View Full Report &gt;&gt;</span>
+    </div>
+    """
+
+
+st.markdown(render_reliability_bar(scores), unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
+# INPUT FORMULIER
+# ─────────────────────────────────────────────
 st.markdown("---")
 
-# ── Live dashboard ──
-if st.session_state.latest_scores:
-    sc = st.session_state.latest_scores
-    st.markdown("### 📊 Live Reliability Dashboard")
-    cols = st.columns(3)
-    for col, label, score, tip in [
-        (cols[0], "Hallucinatie", sc["hallucination_score"], sc.get("hallucinatie_toelichting","")),
-        (cols[1], "Bias",         sc["bias_score"],          sc.get("bias_toelichting","")),
-        (cols[2], "Data Justice", sc["inclusie_score"],      sc.get("inclusie_toelichting","")),
-    ]:
-        color = score_color(score)
-        with col:
-            st.markdown(f"""
-            <div class="score-card">
-                <div style="font-size:12px;color:#6b8aaa;">{label}</div>
-                <div style="font-size:28px;font-weight:700;color:{color};">{score}%</div>
-                <div style="font-size:11px;color:#6b8aaa;">{score_icon(score)} {score_label(score)}</div>
-                <div style="width:100%;height:6px;background:#132238;border-radius:3px;margin:8px 0;overflow:hidden;">
-                    <div style="width:{score}%;height:100%;background:{color};border-radius:3px;"></div>
-                </div>
-                <div style="font-size:11px;color:#6b8aaa;line-height:1.4;">{tip}</div>
-            </div>""", unsafe_allow_html=True)
-
-    total = round((sc["bias_score"] + sc["hallucination_score"] + sc["inclusie_score"]) / 3)
-    tc = score_color(total)
-    st.markdown(f"""
-    <div style="background:#0b1422;border:1px solid #1a2d45;border-radius:10px;padding:14px;margin-top:10px;display:flex;align-items:center;gap:20px;">
-        <div><div style="font-size:12px;color:#6b8aaa;">Totaalscore</div>
-             <div style="font-size:30px;font-weight:700;color:{tc};">{total}%</div>
-             <div style="font-size:12px;color:{tc};">{score_icon(total)} {score_label(total)}</div></div>
-        <div style="flex:1;">
-            <div style="width:100%;height:10px;background:#132238;border-radius:5px;overflow:hidden;">
-                <div style="width:{total}%;height:100%;background:{tc};border-radius:5px;"></div>
-            </div>
-            <div style="font-size:11px;color:#6b8aaa;margin-top:6px;">🔴 0-70 problematisch · 🟡 71-80 aandacht · 🟢 81-100 goed</div>
-        </div>
-    </div>""", unsafe_allow_html=True)
-
-    if len(st.session_state.scores_hist) > 1:
-        st.markdown("**Score-verloop**")
-        df_h = pd.DataFrame(st.session_state.scores_hist, columns=["Bias","Hallucinatie","Inclusie"])
-        st.line_chart(df_h, height=140)
-
-    with st.expander("💡 Verbeteringsuggesties"):
-        for tip in [
-            "Voeg meer context toe voor betere representatie van de persona",
-            "Verfijn de prompt voor specifieker gedrag",
-            "Controleer de dataset op ondervertegenwoordigde groepen",
-        ]:
-            st.markdown(f"✦ {tip}")
-
-    st.markdown("---")
-
-# ── Input ──
-st.markdown(f"**Ask the Synthetic User ✦** _{p['naam']} · {st.session_state.mood}_")
 with st.form("chat_form", clear_on_submit=True):
-    col_i, col_b = st.columns([5, 1])
-    with col_i:
-        user_input = st.text_input("Vraag", placeholder=f"Stel een vraag aan {p['naam']}...", label_visibility="collapsed")
-    with col_b:
-        submitted = st.form_submit_button("✈ Send", use_container_width=True)
+    col_spark, col_input, col_btn = st.columns([0.05, 1, 0.12])
 
-if submitted and user_input.strip():
-    st.session_state.messages.append({"role": "user", "content": user_input.strip()})
-    with st.spinner(f"⚖ {p['naam']} denkt na…"):
-        try:
-            dc       = get_dataset_context(st.session_state.df, p)
-            if "groq_api_key" not in st.session_state or not st.session_state.groq_api_key:
-                st.error("Vul eerst je Groq API key in (sidebar).")
-                st.stop()
-            client_chat = Groq(api_key=st.session_state.groq_api_key)
-            api_msgs = [{"role": "system", "content": build_prompt(p, st.session_state.mood, dc)}] + \
-                       [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-            resp     = client_chat.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                max_tokens=1000,
-                messages=api_msgs,
+    with col_spark:
+        st.markdown('<div style="font-size:22px;color:#3B7EF6;padding-top:6px">✦</div>', unsafe_allow_html=True)
+
+    with col_input:
+        gebruiker_vraag = st.text_input(
+            "Vraag",
+            placeholder="Ask the Synthetic User...",
+            label_visibility="collapsed",
+        )
+
+    with col_btn:
+        versturen = st.form_submit_button("Send ➤", use_container_width=True)
+
+
+# ─────────────────────────────────────────────
+# BERICHTVERWERKING
+# ─────────────────────────────────────────────
+if versturen and gebruiker_vraag.strip():
+    if not client:
+        st.error("⚠️ Voer eerst een geldige Groq API key in de sidebar in.")
+    else:
+        nu = time.strftime("%H:%M")
+        actieve_p = get_actieve_persona()
+
+        # Sla gebruikersbericht op
+        st.session_state.chatgeschiedenis.append({
+            "rol": "gebruiker",
+            "inhoud": gebruiker_vraag.strip(),
+            "tijd": nu,
+        })
+
+        # Eerste bericht: toon persona-kaart intro
+        eerste_bericht = st.session_state.berichtentelling == 0
+
+        with st.spinner("Synthetic User denkt na..."):
+            resultaat = vraag_groq(
+                client,
+                actieve_p,
+                gebruiker_vraag.strip(),
+                st.session_state.api_berichten,
             )
-            raw  = resp.choices[0].message.content
-            sc2  = parse_scores(raw)
-            body = clean_text(raw)
-            if sc2:
-                st.session_state.latest_scores = sc2
-                st.session_state.scores_hist.append([sc2["bias_score"], sc2["hallucination_score"], sc2["inclusie_score"]])
-            st.session_state.messages.append({"role":"assistant","content":body,"scores":sc2})
-        except Exception as e:
-            st.error(f"API fout: {e}")
-    st.rerun()
 
-# ── Export ──
-if st.session_state.messages:
-    st.markdown("---")
-    col_ex1, col_ex2 = st.columns(2)
-    with col_ex1:
+        # Update API-geschiedenis
+        st.session_state.api_berichten.append(
+            {"role": "user", "content": gebruiker_vraag.strip()}
+        )
+        st.session_state.api_berichten.append(
+            {"role": "assistant", "content": resultaat["tekst"]}
+        )
+
+        # Sla antwoord op
+        st.session_state.chatgeschiedenis.append({
+            "rol": "assistent",
+            "inhoud": resultaat["tekst"],
+            "tijd": nu,
+            "toon_persona_kaart": eerste_bericht,
+        })
+
+        # Update scores
+        if resultaat["succes"]:
+            st.session_state.scores = resultaat["scores"]
+
+        st.session_state.berichtentelling += 1
+        st.rerun()
+
+
+# ─────────────────────────────────────────────
+# SCORE DETAIL SECTIE (altijd zichtbaar na gesprek)
+# ─────────────────────────────────────────────
+if st.session_state.berichtentelling > 0:
+    with st.expander("📈 Score detail — laatste evaluatie", expanded=False):
+        col_b, col_h, col_i, col_t = st.columns(4)
+        score_data = [
+            (col_b, scores["bias"], "Bias", "Mate van stereotypering"),
+            (col_h, scores["hallucinaties"], "Hallucinaties", "Feitelijke nauwkeurigheid"),
+            (col_i, scores["inclusie"], "Inclusie", "Representativiteit"),
+            (col_t, scores["totaal"], "Totaal", "Gecombineerde score"),
+        ]
+        for col, val, naam, beschr in score_data:
+            with col:
+                kleur = score_kleur(val)
+                st.markdown(
+                    f'<div class="metric-card">'
+                    f'<div class="metric-val" style="color:{kleur}">{val}%</div>'
+                    f'<div class="metric-lbl">{naam}</div>'
+                    f'<div style="font-size:9px;color:#8B9CB8;margin-top:3px">{beschr}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("""
+        <div style="margin-top:14px;padding:12px;background:#1a2438;border:1px solid #253047;border-radius:8px;font-size:11px;color:#8B9CB8">
+          <strong style="color:#5B9BFF">Scoringsmethode (LangGraph-geïnspireerd):</strong><br>
+          De synthetic user genereert zelf een score op basis van zijn eigen respons.
+          Bias = vrijheid van stereotypen; Hallucinaties = feitelijke gronding in het persona;
+          Inclusie = hoe goed de respons een diverse doelgroep vertegenwoordigt.
+          Scores worden berekend door llama-3.3-70b-versatile en zijn indicatief.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Export knop
+    if st.button("📥 Download gesprek (JSON)"):
         export = {
-            "persona": p["naam"], "dataset": st.session_state.dataset_name,
-            "mood": st.session_state.mood, "exported": datetime.now().isoformat(),
-            "messages": st.session_state.messages,
-            "laatste_scores": st.session_state.latest_scores,
-            "score_history": st.session_state.scores_hist,
+            "project": "ReumaNederland",
+            "persona": {
+                "naam": actieve_p["naam"],
+                "leeftijd": actieve_p["leeftijd"],
+                "diagnose": actieve_p["diagnose"],
+            },
+            "laatste_scores": st.session_state.scores,
+            "chatgeschiedenis": [
+                {"rol": m["rol"], "inhoud": m["inhoud"]}
+                for m in st.session_state.chatgeschiedenis
+            ],
         }
         st.download_button(
-            "📥 Export gesprek (JSON)",
+            label="⬇ Download",
             data=json.dumps(export, indent=2, ensure_ascii=False),
-            file_name=f"data_justice_{p['naam'].replace(' ','_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-            mime="application/json", use_container_width=True,
+            file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
+            mime="application/json",
         )
-    with col_ex2:
-        if st.button("🔄 Nieuw gesprek", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.scores_hist = []
-            st.session_state.latest_scores = None
-            st.rerun()
