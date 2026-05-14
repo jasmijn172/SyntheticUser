@@ -1,13 +1,16 @@
 """
 Data Justice Assistent — Streamlit App
-Synthetic User als cognitieve agent met real-time bias/hallucinatie/inclusie tracking
-Gebouwd met Groq API (llama-3.3-70b-versatile) + LangGraph-geïnspireerde validatieflow
+Exact ontwerp gebaseerd op Archive_4 design
+Groq API (llama-3.3-70b-versatile) voor AI chat
 """
 
 import streamlit as st
 import json
 import os
 import time
+import math
+import re
+from groq import Groq
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
@@ -20,146 +23,343 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# CUSTOM CSS — Dark Navy stijl (Archive_4 ontwerp)
+# CUSTOM CSS — pixel-perfect Archive_4 ontwerp
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 
-/* ── Globaal ── */
+/* ── Reset & Global ── */
 html, body, .stApp {
     background-color: #0B1220 !important;
     color: #F1F5F9 !important;
-    font-family: 'Inter', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 13px !important;
 }
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 0 !important; max-width: 100% !important; }
+.block-container {
+    padding: 0 !important;
+    max-width: 100% !important;
+}
+* { box-sizing: border-box; }
 
 /* ── Sidebar ── */
 section[data-testid="stSidebar"] {
     background: #111827 !important;
-    border-right: 1px solid #253047 !important;
-    min-width: 270px !important;
+    border-right: 1px solid #1C2A40 !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+}
+section[data-testid="stSidebar"] > div:first-child {
+    padding: 14px 14px 14px 14px !important;
 }
 section[data-testid="stSidebar"] .stMarkdown p,
-section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] .stRadio label span {
+section[data-testid="stSidebar"] label {
     color: #8B9CB8 !important;
-    font-size: 13px !important;
+    font-size: 12px !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 {
     color: #F1F5F9 !important;
     font-family: 'Sora', sans-serif !important;
+    font-size: 14px !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
+
+/* Sidebar buttons */
 section[data-testid="stSidebar"] .stButton button {
     background: #1a2438 !important;
     color: #8B9CB8 !important;
     border: 1px solid #253047 !important;
     border-radius: 8px !important;
     font-size: 12px !important;
-    padding: 6px 12px !important;
+    font-family: 'DM Sans', sans-serif !important;
+    padding: 7px 12px !important;
     width: 100% !important;
+    text-align: left !important;
+    transition: all 0.15s !important;
 }
 section[data-testid="stSidebar"] .stButton button:hover {
     background: #1f2d47 !important;
     color: #F1F5F9 !important;
     border-color: #3B7EF6 !important;
 }
+section[data-testid="stSidebar"] .stButton button[kind="primary"] {
+    background: #3B7EF6 !important;
+    color: white !important;
+    border-color: #3B7EF6 !important;
+    font-weight: 600 !important;
+}
+
+/* Sidebar selectbox */
 section[data-testid="stSidebar"] .stSelectbox > div > div {
     background: #1a2438 !important;
     border: 1px solid #253047 !important;
     color: #F1F5F9 !important;
     border-radius: 8px !important;
+    font-size: 12px !important;
 }
 
 /* ── Topbar ── */
 .topbar {
     background: #111827;
-    border-bottom: 1px solid #253047;
-    padding: 12px 24px;
+    border-bottom: 1px solid #1C2A40;
+    padding: 0 24px;
+    height: 64px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
-.topbar-logo {
-    font-family: 'Sora', sans-serif;
-    font-weight: 700;
+.tb-logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tb-logo-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #1a4fa0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.tb-logo-text {
+    font-family: 'DM Sans', sans-serif;
     font-size: 15px;
+    font-weight: 600;
     color: #F1F5F9;
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
-.topbar-project {
+.tb-divider {
+    width: 1px;
+    height: 32px;
+    background: #1C2A40;
+    margin: 0 8px;
+}
+.tb-project-wrap { display: flex; flex-direction: column; }
+.tb-project-name {
     font-family: 'Sora', sans-serif;
     font-size: 18px;
     font-weight: 700;
-    color: #3B7EF6;
-    margin-left: 12px;
+    color: #4a8af4;
+    line-height: 1.2;
 }
-.topbar-sub {
+.tb-project-sub {
     font-size: 11px;
-    color: #8B9CB8;
+    color: #5a7090;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
+.tb-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tb-btn {
+    background: #111827;
+    border: 1px solid #253047;
+    border-radius: 8px;
+    color: #8B9CB8;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    padding: 7px 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.tb-btn:hover { border-color: #3B7EF6; color: #F1F5F9; }
+.tb-btn-primary {
+    background: #3B7EF6;
+    border-color: #3B7EF6;
+    color: white;
+    font-weight: 600;
+}
+.tb-btn-primary:hover { background: #5B9BFF; }
 
 /* ── Chat berichten ── */
-.msg-wrap-bot { display: flex; flex-direction: column; margin-bottom: 18px; }
-.msg-wrap-user { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 18px; }
-.msg-time { font-size: 10px; color: #8B9CB8; margin-bottom: 4px; }
-.msg-sender {
-    font-size: 11px; color: #5B9BFF; font-weight: 600;
-    margin-bottom: 5px; display: flex; align-items: center; gap: 6px;
+.chat-ts {
+    text-align: center;
+    font-size: 11px;
+    color: #3a5070;
+    margin: 8px 0 12px 0;
 }
+.msg-bot-wrap { display: flex; flex-direction: column; margin-bottom: 16px; }
+.msg-user-wrap { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 16px; }
+.msg-sender {
+    font-size: 11px;
+    color: #5B9BFF;
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.msg-sender-sub { font-size: 10px; color: #5a7090; font-weight: 400; margin-top: 1px; }
 .bubble-bot {
     background: #151f33;
-    border: 1px solid #253047;
-    border-radius: 12px 12px 12px 4px;
+    border: 1px solid #1C2A40;
+    border-radius: 10px 10px 10px 3px;
     padding: 12px 16px;
-    max-width: 82%;
+    max-width: 84%;
     font-size: 13px;
     line-height: 1.65;
     color: #F1F5F9;
 }
 .bubble-user {
     background: #3B7EF6;
-    border-radius: 12px 12px 4px 12px;
-    padding: 12px 16px;
+    border-radius: 10px 10px 3px 10px;
+    padding: 11px 15px;
     max-width: 72%;
     font-size: 13px;
-    line-height: 1.65;
+    line-height: 1.6;
     color: white;
 }
-
-/* ── Persona kaart ── */
-.persona-card {
-    background: #1a2438;
-    border: 1px solid #2E3D5A;
-    border-radius: 14px;
-    padding: 18px;
-    margin-top: 10px;
-    max-width: 800px;
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #3B7EF6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    margin-left: 8px;
+    flex-shrink: 0;
+    vertical-align: middle;
 }
-.pc-name { font-family: 'Sora', sans-serif; font-size: 18px; font-weight: 700; color: #F1F5F9; margin-bottom: 2px; }
-.pc-diag { font-size: 11px; color: #1DB87A; margin-bottom: 6px; }
-.pc-quote { font-size: 12px; color: #8B9CB8; font-style: italic; line-height: 1.55; margin-bottom: 10px; }
-.pc-age { background: rgba(59,126,246,.18); color: #5B9BFF; border-radius: 20px; padding: 3px 14px; font-size: 11px; font-weight: 700; display: inline-block; }
-.pc-tag { display: inline-block; background: #111827; border: 1px solid #2E3D5A; color: #8B9CB8; border-radius: 20px; padding: 2px 10px; font-size: 10px; margin: 2px 2px 2px 0; }
-.pc-det-label { color: #8B9CB8; font-size: 11px; min-width: 100px; }
-.pc-det-val { color: #F1F5F9; font-size: 11px; }
 
-/* ── XAI sectie ── */
-.xai-box {
-    background: #111827;
-    border: 1px solid #253047;
+/* ── Persona kaart (in chat) ── */
+.pc-card {
+    background: #151f33;
+    border: 1px solid #1C2A40;
+    border-radius: 12px;
+    padding: 16px;
+    max-width: 860px;
+    margin-top: 8px;
+    position: relative;
+}
+.pc-header {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+}
+.pc-photo {
+    width: 100px;
+    height: 100px;
     border-radius: 10px;
-    padding: 14px 18px;
-    margin-top: 10px;
-    max-width: 800px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #253047;
 }
-.xai-title { font-size: 13px; font-weight: 600; color: #F1F5F9; margin-bottom: 10px; }
+.pc-main { flex: 1; min-width: 0; }
+.pc-name {
+    font-family: 'Sora', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: #F1F5F9;
+}
+.pc-diag { font-size: 11px; color: #1DB87A; margin: 2px 0 6px; }
+.pc-quote {
+    font-size: 12px;
+    color: #8B9CB8;
+    font-style: italic;
+    line-height: 1.55;
+    margin-bottom: 9px;
+}
+.pc-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.pc-tag {
+    background: #1a2438;
+    border: 1px solid #253047;
+    color: #8B9CB8;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 11px;
+}
+.pc-age {
+    background: rgba(59,126,246,.18);
+    color: #5B9BFF;
+    border-radius: 20px;
+    padding: 3px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.view-full-btn {
+    background: transparent;
+    border: 1px solid #253047;
+    border-radius: 7px;
+    color: #8B9CB8;
+    font-size: 11px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+    white-space: nowrap;
+    margin-top: 6px;
+    display: block;
+}
+.view-full-btn:hover { border-color: #3B7EF6; color: #5B9BFF; }
+.pc-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #1C2A40;
+}
+.pc-det-row { display: flex; align-items: flex-start; gap: 7px; }
+.pc-det-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+.pc-det-label { color: #5a7090; font-size: 11px; min-width: 74px; flex-shrink: 0; }
+.pc-det-val { color: #F1F5F9; font-size: 11px; line-height: 1.4; }
+
+/* ── XAI Box ── */
+.xai-box {
+    background: #0f1929;
+    border: 1px solid #1C2A40;
+    border-radius: 10px;
+    padding: 13px 16px;
+    max-width: 860px;
+    margin-top: 6px;
+}
+.xai-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #F1F5F9;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
 .xai-accent { color: #5B9BFF; }
+.xai-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+}
+.xai-col-label {
+    font-size: 10px;
+    color: #5a7090;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 6px;
+}
+.xai-source { font-size: 11px; color: #F1F5F9; padding: 2px 0; }
+.xai-source::before { content: "• "; color: #3B7EF6; }
 .xai-badge {
     display: inline-block;
     background: rgba(59,126,246,.15);
@@ -169,100 +369,480 @@ section[data-testid="stSidebar"] .stSelectbox > div > div {
     font-size: 10px;
     margin: 2px 2px 2px 0;
 }
-.xai-source { font-size: 11px; color: #F1F5F9; padding: 2px 0; }
-.xai-source::before { content: "• "; color: #3B7EF6; }
 .xai-expl { font-size: 11px; color: #8B9CB8; line-height: 1.5; }
-
-......
-
-/* ── Score ring ── */
-.score-ring-outer { display: flex; flex-direction: column; align-items: center; padding: 16px 0; }
-
-/* ── Sidebar persona items ── */
-.persona-sidebar-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 10px; border-radius: 8px;
-    border: 1px solid transparent;
-    margin-bottom: 5px; cursor: pointer;
-    transition: .15s;
+.xai-feedback {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    justify-content: flex-end;
 }
-.persona-sidebar-item.active { background: rgba(59,126,246,.12); border-color: rgba(59,126,246,.4); }
+.xai-fb-label { font-size: 11px; color: #5a7090; }
+.feedback-btn {
+    background: transparent;
+    border: 1px solid #253047;
+    border-radius: 6px;
+    color: #5a7090;
+    padding: 3px 9px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+.feedback-btn:hover { border-color: #3B7EF6; color: #3B7EF6; }
+
+/* ── Reliability bar ── */
+.rel-bar {
+    background: #111827;
+    border-top: 1px solid #1C2A40;
+    padding: 9px 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.rel-label { font-size: 11px; color: #5a7090; }
+.rel-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.rel-amber { background: rgba(245,158,11,.13); color: #F59E0B; border: 1px solid rgba(245,158,11,.3); }
+.rel-green { background: rgba(29,184,122,.1); color: #1DB87A; border: 1px solid rgba(29,184,122,.3); }
+.rel-blue { background: rgba(59,126,246,.1); color: #5B9BFF; border: 1px solid rgba(59,126,246,.25); }
+.rel-red { background: rgba(239,68,68,.12); color: #EF4444; border: 1px solid rgba(239,68,68,.3); }
+.rel-view {
+    margin-left: auto;
+    font-size: 11px;
+    color: #3B7EF6;
+    cursor: pointer;
+    font-weight: 500;
+}
+.rel-view:hover { text-decoration: underline; }
 
 /* ── Input ── */
+.input-wrap {
+    background: #0B1220;
+    border-top: 1px solid #1C2A40;
+    padding: 12px 22px 16px;
+}
+.input-label { font-size: 11px; color: #5a7090; margin-bottom: 6px; }
+.input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #111827;
+    border: 1px solid #253047;
+    border-radius: 10px;
+    padding: 8px 14px;
+    transition: border-color 0.2s;
+}
+.input-row:focus-within { border-color: #3B7EF6; }
+.spark-icon { font-size: 20px; color: #3B7EF6; flex-shrink: 0; line-height: 1; }
+
+/* Main chat input */
 .stTextInput input {
-    background: #1a2438 !important;
-    border: 1px solid #2E3D5A !important;
+    background: #111827 !important;
+    border: 1px solid #253047 !important;
     border-radius: 10px !important;
     color: #F1F5F9 !important;
     font-size: 13px !important;
+    font-family: 'DM Sans', sans-serif !important;
     padding: 10px 16px !important;
+    height: 44px !important;
 }
-.stTextInput input:focus { border-color: #3B7EF6 !important; }
-.stTextInput input::placeholder { color: #8B9CB8 !important; }
+.stTextInput input:focus { border-color: #3B7EF6 !important; box-shadow: none !important; }
+.stTextInput input::placeholder { color: #3a5070 !important; }
+.stTextInput label { color: #5a7090 !important; font-size: 11px !important; }
 
-/* ── Stuur-knop ── */
-div[data-testid="stButton"] > button {
+/* Send button */
+div[data-testid="stButton"] > button[kind="primary"],
+div[data-testid="column"] div[data-testid="stButton"] > button {
     background: #3B7EF6 !important;
     color: white !important;
     border: none !important;
     border-radius: 10px !important;
     font-weight: 600 !important;
     font-size: 13px !important;
+    font-family: 'DM Sans', sans-serif !important;
     padding: 10px 20px !important;
-    transition: .15s !important;
+    height: 44px !important;
+    transition: background 0.15s !important;
 }
-div[data-testid="stButton"] > button:hover {
+div[data-testid="stButton"] > button[kind="primary"]:hover {
     background: #5B9BFF !important;
 }
 
-/* ── Reliability badges ── */
-.rel-bar {
+/* ── Sidebar persona items ── */
+.sb-persona-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 24px;
-    background: #111827;
-    border-top: 1px solid #253047;
-    flex-wrap: wrap;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    margin-bottom: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
 }
-.rel-label { font-size: 11px; color: #8B9CB8; }
-.rel-badge-amber {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(245,158,11,.13); color: #F59E0B;
-    border: 1px solid rgba(245,158,11,.3);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+.sb-persona-item:hover {
+    background: rgba(59,126,246,.07);
+    border-color: rgba(59,126,246,.2);
 }
-.rel-badge-green {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(29,184,122,.1); color: #1DB87A;
-    border: 1px solid rgba(29,184,122,.3);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+.sb-persona-item.active {
+    background: rgba(59,126,246,.13);
+    border-color: rgba(59,126,246,.4);
 }
-.rel-badge-blue {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(59,126,246,.1); color: #5B9BFF;
-    border: 1px solid rgba(59,126,246,.25);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+.sb-persona-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #1f2d47;
+    border: 1px solid #253047;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
 }
-.rel-badge-red {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(239,68,68,.12); color: #EF4444;
-    border: 1px solid rgba(239,68,68,.3);
-    border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 600;
+.sb-persona-avatar-active { background: rgba(59,126,246,.15); }
+.sb-persona-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #F1F5F9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+.sb-persona-meta { font-size: 10px; color: #5a7090; }
+.sb-persona-age {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8B9CB8;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.sb-persona-age-active { color: #5B9BFF; }
 
-/* ── Metric kaartjes ── */
-.metric-card {
+/* ── Dataset & project items ── */
+.sb-dataset-item {
+    background: #1a2438;
+    border: 1px solid #253047;
+    border-radius: 7px;
+    padding: 8px 11px;
+    font-size: 12px;
+    color: #8B9CB8;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 6px;
+}
+.sb-project-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 9px;
+    border-radius: 7px;
+    font-size: 12px;
+    color: #5a7090;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 3px;
+    border: 1px solid transparent;
+}
+.sb-project-item:hover { background: rgba(59,126,246,.07); color: #F1F5F9; }
+.sb-project-item.active {
+    background: rgba(59,126,246,.1);
+    border-color: rgba(59,126,246,.35);
+    color: #F1F5F9;
+}
+.sb-view-all { font-size: 11px; color: #3B7EF6; cursor: pointer; padding: 4px 9px; }
+.sb-view-all:hover { text-decoration: underline; }
+
+/* ── Sidebar footer ── */
+.sb-footer {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-top: 12px;
+    border-top: 1px solid #1C2A40;
+    margin-top: auto;
+}
+.sb-designer-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #3B7EF6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+}
+.sb-designer-name { font-size: 12px; color: #F1F5F9; font-weight: 500; }
+.sb-designer-role { font-size: 10px; color: #5a7090; }
+
+/* ── Section labels ── */
+.sb-section-title {
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #F1F5F9 !important;
+    margin-bottom: 2px !important;
+}
+.sb-section-sub {
+    font-size: 10px;
+    color: #3B7EF6;
+    margin-bottom: 8px;
+    display: block;
+}
+.sb-divider { border: none; border-top: 1px solid #1C2A40; margin: 10px 0; }
+
+/* ── Validation Panel (rechts) ── */
+.val-panel {
+    background: #111827;
+    border: 1px solid #1C2A40;
+    border-radius: 12px;
+    padding: 16px;
+    width: 100%;
+}
+.val-panel-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #4a8af4;
+    margin-bottom: 14px;
+}
+.val-check-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #1C2A40;
+    font-size: 12px;
+}
+.val-check-label { color: #8B9CB8; }
+.val-check-ok { color: #1DB87A; font-size: 11px; cursor: pointer; }
+.val-check-warn { color: #F59E0B; font-size: 11px; cursor: pointer; }
+.val-check-med { color: #EF4444; font-size: 11px; cursor: pointer; }
+
+/* Score ring */
+.score-ring-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 14px 0;
+    padding: 12px;
     background: #151f33;
+    border-radius: 10px;
+    border: 1px solid #1C2A40;
+}
+.score-legend { display: flex; flex-direction: column; gap: 4px; }
+.score-legend-good { font-size: 12px; font-weight: 600; color: #1DB87A; }
+.score-legend-improve { font-size: 11px; color: #8B9CB8; }
+.score-legend-link { font-size: 11px; color: #3B7EF6; cursor: pointer; }
+.score-legend-link:hover { text-decoration: underline; }
+
+/* Improve AI input section */
+.improve-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4a8af4;
+    margin: 14px 0 10px;
+}
+.improve-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #1C2A40;
+    font-size: 12px;
+}
+.improve-icon { font-size: 13px; margin-right: 5px; }
+.improve-label { color: #F1F5F9; }
+.improve-action { color: #5a7090; font-size: 11px; }
+
+/* Full report panel */
+.fr-section { margin-bottom: 14px; }
+.fr-cat-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #F1F5F9;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.fr-pct { font-size: 12px; color: #8B9CB8; }
+.fr-bar-bg {
+    background: #1C2A40;
+    border-radius: 4px;
+    height: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.fr-bar-fill { height: 6px; border-radius: 4px; }
+.fr-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: #151f33;
+    border: 1px solid #1C2A40;
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: #F1F5F9;
+    margin-bottom: 5px;
+}
+.fr-details-link { font-size: 11px; color: #3B7EF6; text-align: right; margin-top: 4px; cursor: pointer; }
+.fr-details-link:hover { text-decoration: underline; }
+
+/* Visualisatie sectie */
+.vis-section { margin-top: 14px; }
+.vis-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #F1F5F9;
+    margin-bottom: 10px;
+}
+.vis-ring-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+.suggestions-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #F1F5F9;
+    margin: 10px 0 7px;
+}
+.suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #151f33;
+    border: 1px solid #1C2A40;
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: #F1F5F9;
+    margin-bottom: 5px;
+}
+.suggestion-star { color: #3B7EF6; font-size: 13px; }
+
+/* Panel action buttons */
+.panel-btn {
+    background: #1a2438;
+    border: 1px solid #253047;
+    border-radius: 8px;
+    color: #8B9CB8;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.panel-btn:hover { border-color: #3B7EF6; color: #F1F5F9; }
+.panel-btn-primary {
+    background: #3B7EF6;
+    border-color: #3B7EF6;
+    color: white;
+    font-weight: 600;
+}
+.panel-btn-primary:hover { background: #5B9BFF; }
+.panel-close {
+    background: transparent;
+    border: none;
+    color: #5a7090;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    float: right;
+}
+.panel-close:hover { color: #F1F5F9; }
+
+/* ── Persona expanded in sidebar (screen 5) ── */
+.sb-persona-expanded {
+    background: #1a2438;
     border: 1px solid #253047;
     border-radius: 10px;
-    padding: 14px 16px;
-    text-align: center;
+    padding: 12px;
+    margin-bottom: 6px;
 }
-.metric-val { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
-.metric-lbl { font-size: 10px; color: #8B9CB8; text-transform: uppercase; letter-spacing: .5px; }
+.sb-persona-exp-header { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.sb-persona-exp-photo {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: #253047;
+    flex-shrink: 0;
+}
+.sb-persona-exp-name { font-size: 12px; font-weight: 600; color: #F1F5F9; }
+.sb-persona-exp-diag { font-size: 10px; color: #EF4444; }
+.sb-persona-exp-goals { font-size: 11px; color: #8B9CB8; margin-bottom: 6px; }
+.sb-persona-exp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
+.sb-persona-exp-tag {
+    background: rgba(59,126,246,.15);
+    color: #5B9BFF;
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 10px;
+}
+.sb-persona-exp-quote {
+    font-size: 11px;
+    color: #8B9CB8;
+    font-style: italic;
+    line-height: 1.5;
+    border-top: 1px solid #253047;
+    padding-top: 7px;
+}
 
-/* ── Expander styling ── */
+/* ── Mood checker / Assign project dropdown overlays ── */
+.dropdown-overlay {
+    background: #1a2438;
+    border: 1px solid #253047;
+    border-radius: 10px;
+    padding: 8px 0;
+    min-width: 180px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 14px;
+    font-size: 12px;
+    color: #F1F5F9;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.dropdown-item:hover { background: rgba(59,126,246,.1); }
+.dropdown-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid #253047;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.dropdown-check.checked { background: #3B7EF6; border-color: #3B7EF6; }
+
+/* ── Expander ── */
 .streamlit-expanderHeader {
     background: #1a2438 !important;
     border: 1px solid #253047 !important;
@@ -276,39 +856,52 @@ div[data-testid="stButton"] > button:hover {
     border-top: none !important;
 }
 
-/* ── Divider ── */
-hr { border-color: #253047 !important; }
+/* ── Progress bars ── */
+.stProgress > div > div > div > div {
+    background-color: #3B7EF6 !important;
+}
 
-/* ── Selectbox ── */
-.stSelectbox label { color: #8B9CB8 !important; font-size: 11px !important; }
+/* ── Metrics ── */
+.metric-card {
+    background: #151f33;
+    border: 1px solid #1C2A40;
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: center;
+}
+.metric-val { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+.metric-lbl { font-size: 10px; color: #8B9CB8; text-transform: uppercase; letter-spacing: .5px; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #253047; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3B7EF6; }
+
+/* ── General divider ── */
+hr { border-color: #1C2A40 !important; margin: 8px 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# GROQ CLIENT INIT
+# GROQ CLIENT
 # ─────────────────────────────────────────────
 def get_groq_client():
-    """Haal Groq client op, met fallback naar st.secrets of omgevingsvariabele."""
     api_key = None
-    # 1) Streamlit secrets (voorkeur bij deployment)
     try:
-        api_key = st.secrets["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"]
+        api_key = st.secrets["GROQ_API_KEY"]
     except Exception:
         pass
-    # 2) Omgevingsvariabele
     if not api_key:
-        api_key = os.environ.get("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")
-    # 3) Sidebar invoer (dev mode)
-    if not api_key:
-        api_key = st.session_state.get("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")
+        api_key = os.environ.get("GROQ_API_KEY")
     if api_key:
         return Groq(api_key=api_key)
     return None
 
 
 # ─────────────────────────────────────────────
-# PERSONA DATA (gebaseerd op notebook + ontwerp)
+# PERSONA DATA
 # ─────────────────────────────────────────────
 PERSONAS = [
     {
@@ -316,253 +909,261 @@ PERSONAS = [
         "initials": "AJ",
         "naam": "Alex Johnson",
         "leeftijd": 52,
+        "leeftijd_label": "52jr",
         "geslacht": "Vrouw",
         "diagnose": "Reumatoïde artritis",
-        "quote": "Ik wil mijn leven blijven leiden, maar de vermoeidheid maakt het moeilijk om te plannen of consistent te zijn.",
-        "tags": ["Vermoeidheid", "Pijnbeheer", "Zelfstandigheid", "Work-life balance"],
-        "context": "Werkt parttime en woont samen met partner",
-        "goals": "Actief blijven, onafhankelijkheid behouden",
-        "frustrations": "Onvoorspelbare vermoeidheid, beperkte energie",
-        "tech_support": "Gemiddeld",
+        "quote": "I want to keep living my life, but the fatigue makes it hard to plan or be consistent.",
+        "tags": ["Fatigue", "Pain Management", "Independence", "Work-life balance"],
+        "context": "Works part-time and lives with a partner",
+        "goals": "Stay active, maintain independence",
+        "frustrations": "Unpredictable fatigue, limited energy",
+        "tech_support": "Medium",
         "data_bronnen": ["ReumaNederland Interviews n=65", "Patiëntforum data", "Wetenschappelijke literatuur"],
         "sleutelfactoren": ["Diagnose", "Leefstijl", "Emotionele impact"],
-        "xai_uitleg": "Gegenereerd op basis van patronen in de dataset. Vermoeidheid wordt vaak als uitdaging genoemd door vrouwen van 50+.",
-        "kwaliteit": "goed",  # voor validatie
+        "xai_uitleg": "Gegenereerd op basis van patronen in de dataset. Fatigue wordt vaak als uitdaging genoemd",
+        "kwaliteit": "goed",
     },
     {
         "id": 2,
-        "initials": "TK",
-        "naam": "Thomas Kemp",
-        "leeftijd": 34,
-        "geslacht": "Man",
-        "diagnose": "Artritis psoriatica",
-        "quote": "Apps moeten gewoon werken. Ik heb geen tijd voor uitleg — geef me de info in 30 seconden.",
-        "tags": ["Efficiëntie", "Werk", "Digitaal vaardig", "Tijdgebrek"],
-        "context": "Fulltime werkend, druk gezinsleven met 2 kinderen",
-        "goals": "Snel toegang tot informatie, alles mobiel",
-        "frustrations": "Trage systemen, onnodige clicks, onduidelijke navigatie",
+        "initials": "AJ",
+        "naam": "Alex Johnson",
+        "leeftijd": 18,
+        "leeftijd_label": "18jr",
+        "geslacht": "Vrouw",
+        "diagnose": "Juveniele artritis",
+        "quote": "School en sport zijn mijn leven. De pijn maakt dat moeilijk, maar ik geef niet op.",
+        "tags": ["Jong", "School", "Sport", "Vriendschappen"],
+        "context": "Scholier, woont bij ouders",
+        "goals": "Normaal leven leiden, studie afmaken",
+        "frustrations": "Niet begrepen worden, missen van activiteiten",
         "tech_support": "Hoog",
-        "data_bronnen": ["ReumaNederland survey 2024", "Gebruikersinterviews n=12"],
-        "sleutelfactoren": ["Leefstijl", "Werkdruk"],
-        "xai_uitleg": "Technologisch vaardig profiel. Tijdschaarste is de dominante factor in dit persona.",
+        "data_bronnen": ["ReumaNederland Interviews n=65", "Jongerenonderzoek"],
+        "sleutelfactoren": ["Leeftijd", "Sociale context"],
+        "xai_uitleg": "Jong persona met focus op sociale inclusie en schoolprestaties.",
         "kwaliteit": "goed",
     },
     {
         "id": 3,
-        "initials": "FM",
-        "naam": "Fatima Mansour",
-        "leeftijd": 68,
-        "geslacht": "Vrouw",
-        "diagnose": "Artrose & fibromyalgie",
-        "quote": "Soms begrijp ik niet wat ze van me verwachten. Mijn dochter helpt me, maar ik wil dat zelf kunnen doen.",
-        "tags": ["Lage digitale geletterdheid", "Afhankelijkheid", "Taalbarrière", "Inclusie"],
-        "context": "Woont alleen, heeft informele zorger (dochter), spreekt Nederlands en Arabisch",
-        "goals": "Begrijpen wat er van haar verwacht wordt, meer zelfredzaamheid",
-        "frustrations": "Kleine tekst, onduidelijke iconen, medisch jargon",
-        "tech_support": "Laag",
-        "data_bronnen": ["ReumaNederland Interviews n=65", "Zorginstellingsdata", "Migranten gezondheidsonderzoek"],
-        "sleutelfactoren": ["Inclusie", "Taalvaardigheid", "Toegankelijkheid"],
-        "xai_uitleg": "Vertegenwoordigt een kwetsbare doelgroep. Laagdrempeligheid en toegankelijkheid zijn cruciaal.",
+        "initials": "AJ",
+        "naam": "Alex Johnson",
+        "leeftijd": 23,
+        "leeftijd_label": "23jr",
+        "geslacht": "Man",
+        "diagnose": "Artritis psoriatica",
+        "quote": "Ik wil werken en carrière maken, maar de ziekte gooit roet in het eten.",
+        "tags": ["Werk", "Carrière", "Jonge professional", "Zelfstandig"],
+        "context": "Starter op de arbeidsmarkt, eigen appartement",
+        "goals": "Carrière opbouwen, onafhankelijk zijn",
+        "frustrations": "Werkgever begrijpt het niet, energiegebrek",
+        "tech_support": "Hoog",
+        "data_bronnen": ["ReumaNederland survey 2024", "Arbeidsmarktonderzoek"],
+        "sleutelfactoren": ["Werkdruk", "Leefstijl"],
+        "xai_uitleg": "Jonge werkende met focus op professionele ontwikkeling.",
         "kwaliteit": "goed",
     },
     {
         "id": 4,
-        "initials": "PK",
-        "naam": "Pieter de Kruijk",
-        "leeftijd": 47,
-        "geslacht": "Man",
-        "diagnose": "Reumatoïde artritis (8 jaar)",
-        "quote": "Ik ben al 8 jaar patiënt. Ik weet meer over dit systeem dan sommige artsen.",
-        "tags": ["Ervaringsdeskundige", "Hoge betrokkenheid", "Systeem-kritisch", "Beleidsinteresse"],
-        "context": "Actief in patiëntenvereniging, schrijft ervaringsreviews online",
-        "goals": "Transparantie over behandelingen, invloed op zorgbeleid",
-        "frustrations": "Niet serieus genomen worden, gebrek aan co-creatie met patiënten",
-        "tech_support": "Hoog",
-        "data_bronnen": ["ReumaNederland community data", "Patiëntenpanel interviews"],
-        "sleutelfactoren": ["Ervaringsjaren", "Betrokkenheid", "Systemisch begrip"],
-        "xai_uitleg": "Expert-gebruikersprofiel met sterke mening over systeemintegriteit en transparantie.",
+        "initials": "AJ",
+        "naam": "Alex Johnson",
+        "leeftijd": 34,
+        "leeftijd_label": "34jr",
+        "geslacht": "Vrouw",
+        "diagnose": "Reumatoïde artritis",
+        "quote": "Met twee kinderen en een baan is er weinig ruimte voor ziekte. Ik moet vooruit.",
+        "tags": ["Moeder", "Werk", "Gezin", "Multitasking"],
+        "context": "Parttime werkend, twee jonge kinderen",
+        "goals": "Goede moeder zijn, gezin draaiende houden",
+        "frustrations": "Vermoeidheid bij gezinstaken, schuldgevoel",
+        "tech_support": "Gemiddeld",
+        "data_bronnen": ["ReumaNederland Interviews n=65", "Gezinsonderzoek"],
+        "sleutelfactoren": ["Gezinscontext", "Werkdruk", "Vermoeidheid"],
+        "xai_uitleg": "Persona gericht op het combineren van zorg en werk.",
         "kwaliteit": "goed",
     },
+]
+
+PROJECTS = [
+    {"id": 1, "naam": "Project 1", "personas": 2, "rating": 71, "exports": 3},
+    {"id": 2, "naam": "ReumaNederland", "personas": 4, "rating": 82, "exports": 10},
+    {"id": 3, "naam": "Project 3", "personas": 1, "rating": 65, "exports": 1},
+]
+
+DATASETS = [
     {
-        "id": 5,
-        "initials": "??",
-        "naam": "Tech-savvy Millennial",
-        "leeftijd": 30,
-        "geslacht": "Onbekend",
-        "diagnose": "Niet gespecificeerd",
-        "quote": "Millennials gebruiken 73% vaker apps. Ze verwachten instant feedback.",
-        "tags": ["Vaag", "Stereotyp", "Hallucinatief", "Onvolledig"],
-        "context": "Niet gespecificeerd — te generiek profiel",
-        "goals": "Onbekend",
-        "frustrations": "Onbekend",
-        "tech_support": "Onbekend",
-        "data_bronnen": ["Onbekende bron (niet geverifieerd)", "Statistiek zonder referentie"],
-        "sleutelfactoren": ["Leeftijdsstereotyp"],
-        "xai_uitleg": "⚠️ Dit persona bevat mogelijk hallucinaties (73%-statistiek) en bias (leeftijdsstereotypering). Validatie aanbevolen.",
-        "kwaliteit": "slecht",  # triggers hogere foutscores
+        "id": 1,
+        "naam": "Dataset_ReumaNederland",
+        "bronnen": ["ReumaNederland Interviews n=65", "ReumaNederland Enquêtes n=482", "Reuma Patiëntforum data"],
     },
+    {"id": 2, "naam": "Dataset_ReumaNederland", "bronnen": []},
+    {"id": 3, "naam": "Dataset_ReumaNederland", "bronnen": []},
+    {"id": 4, "naam": "Dataset_ReumaNederland", "bronnen": []},
 ]
 
 
 # ─────────────────────────────────────────────
-# SCORE HULPFUNCTIES
+# SCORE & BADGE HELPERS
 # ─────────────────────────────────────────────
 def score_kleur(score: int) -> str:
-    if score >= 80:
-        return "#1DB87A"  # groen
-    elif score >= 60:
-        return "#F59E0B"  # amber
-    return "#EF4444"  # rood
-
+    if score >= 75:
+        return "#1DB87A"
+    elif score >= 50:
+        return "#F59E0B"
+    return "#EF4444"
 
 def score_label(score: int) -> str:
-    if score >= 80:
-        return "Laag risico"
-    elif score >= 60:
-        return "Gemiddeld"
-    return "Hoog risico"
+    if score >= 75:
+        return "Low"
+    elif score >= 50:
+        return "Medium"
+    return "High"
 
+def badge_class(score: int) -> str:
+    if score >= 75:
+        return "rel-green"
+    elif score >= 50:
+        return "rel-amber"
+    return "rel-red"
 
-def badge_html(score: int, label: str, icon: str) -> str:
-    if score >= 80:
-        cls = "rel-badge-green"
-        prefix = "✓"
-    elif score >= 60:
-        cls = "rel-badge-amber"
-        prefix = "⚠"
-    else:
-        cls = "rel-badge-red"
-        prefix = "✗"
-    return f'<span class="{cls}">{prefix} {label} — {score_label(score)}</span>'
+def badge_icon(score: int) -> str:
+    if score >= 75:
+        return "✓"
+    elif score >= 50:
+        return "⚠"
+    return "✗"
 
-
-def teken_score_ring(score: int, label: str = "Totaalscore"):
-    """SVG score-ring zoals in het ontwerp."""
+def score_ring_svg(score: int, size: int = 100) -> str:
+    r = size * 0.42
+    cx = cy = size / 2
+    circ = 2 * math.pi * r
+    offset = circ * (1 - score / 100)
     kleur = score_kleur(score)
-    circumference = 2 * 3.14159 * 45
-    offset = circumference * (1 - score / 100)
-    svg = f"""
-    <div style="display:flex;flex-direction:column;align-items:center;padding:14px 0">
-      <svg width="110" height="110" viewBox="0 0 110 110">
-        <circle cx="55" cy="55" r="45" fill="none" stroke="#253047" stroke-width="9"/>
-        <circle cx="55" cy="55" r="45" fill="none" stroke="{kleur}" stroke-width="9"
-                stroke-dasharray="{circumference:.1f}" stroke-dashoffset="{offset:.1f}"
-                stroke-linecap="round" transform="rotate(-90 55 55)"/>
-        <text x="55" y="60" text-anchor="middle" font-size="20" font-weight="700"
-              fill="#F1F5F9" font-family="Inter,sans-serif">{score}%</text>
-      </svg>
-      <div style="font-size:12px;color:{kleur};font-weight:600;margin-top:4px">
-        {score_label(score)}
-      </div>
-      <div style="font-size:10px;color:#8B9CB8;margin-top:2px">{label}</div>
-    </div>
-    """
-    return svg
+    fs = size * 0.18
+    return f"""
+    <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}">
+      <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#1C2A40" stroke-width="{size*0.09}"/>
+      <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{kleur}" stroke-width="{size*0.09}"
+              stroke-dasharray="{circ:.1f}" stroke-dashoffset="{offset:.1f}"
+              stroke-linecap="round" transform="rotate(-90 {cx} {cy})"/>
+      <text x="{cx}" y="{cy + fs*0.38}" text-anchor="middle" font-size="{fs}"
+            font-weight="700" fill="#F1F5F9" font-family="DM Sans,sans-serif">{score}%</text>
+    </svg>"""
 
 
 # ─────────────────────────────────────────────
-# PERSONA KAART HTML
+# PERSONA KAART HTML (in chat)
 # ─────────────────────────────────────────────
 def render_persona_card(p: dict) -> str:
-    tags_html = "".join([f'<span class="pc-tag">{t}</span>' for t in p["tags"]])
-    bronnen_html = "".join([f'<div class="xai-source">{b}</div>' for b in p["data_bronnen"]])
-    factoren_html = "".join([f'<span class="xai-badge">{f}</span>' for f in p["sleutelfactoren"]])
-    warn = "⚠️ " if p["kwaliteit"] == "slecht" else ""
-
+    tags = "".join([f'<span class="pc-tag">{t}</span>' for t in p["tags"]])
     return f"""
-    <div class="persona-card">
-      <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:14px">
-        <div style="width:64px;height:64px;border-radius:10px;background:#1f2d47;border:1px solid #2E3D5A;
-                    display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;
-                    color:#5B9BFF;flex-shrink:0">{warn}{p["initials"]}</div>
-        <div style="flex:1">
-          <div class="pc-name">{p["naam"]}</div>
-          <div class="pc-diag">{p["geslacht"]} · {p["diagnose"]}</div>
-          <div class="pc-quote">"{p["quote"]}"</div>
-          <div>{tags_html}</div>
+    <div class="pc-card">
+      <div class="pc-header">
+        <img class="pc-photo" src="https://i.pravatar.cc/100?u={p['id']}" alt="{p['naam']}"
+             onerror="this.style.background='#253047';this.src=''">
+        <div class="pc-main">
+          <div class="pc-name">{p['naam']}</div>
+          <div class="pc-diag">{p['geslacht']} · {p['diagnose']}</div>
+          <div class="pc-quote">"{p['quote']}"</div>
+          <div class="pc-tags">{tags}</div>
         </div>
-        <div class="pc-age">{p["leeftijd"]} jr</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
+          <div class="pc-age">{p['leeftijd']} yrs</div>
+          <button class="view-full-btn">View full Persona &gt;</button>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:12px;border-top:1px solid #253047">
-        <div style="display:flex;gap:8px"><span class="pc-det-label">📋 Context</span><span class="pc-det-val">{p["context"]}</span></div>
-        <div style="display:flex;gap:8px"><span class="pc-det-label">🎯 Goals</span><span class="pc-det-val">{p["goals"]}</span></div>
-        <div style="display:flex;gap:8px"><span class="pc-det-label">⚡ Frustraties</span><span class="pc-det-val">{p["frustrations"]}</span></div>
-        <div style="display:flex;gap:8px"><span class="pc-det-label">💻 Tech</span><span class="pc-det-val">{p["tech_support"]}</span></div>
+      <div class="pc-details">
+        <div class="pc-det-row">
+          <span class="pc-det-icon">📋</span>
+          <span class="pc-det-label">Context</span>
+          <span class="pc-det-val">{p['context']}</span>
+        </div>
+        <div class="pc-det-row">
+          <span class="pc-det-icon">🎯</span>
+          <span class="pc-det-label">Goals</span>
+          <span class="pc-det-val">{p['goals']}</span>
+        </div>
+        <div class="pc-det-row">
+          <span class="pc-det-icon">⚡</span>
+          <span class="pc-det-label">Frustrations</span>
+          <span class="pc-det-val">{p['frustrations']}</span>
+        </div>
+        <div class="pc-det-row">
+          <span class="pc-det-icon">💻</span>
+          <span class="pc-det-label">Tech Support</span>
+          <span class="pc-det-val">{p['tech_support']}</span>
+        </div>
       </div>
-    </div>
+    </div>"""
+
+
+def render_xai_box(p: dict) -> str:
+    bronnen = "".join([f'<div class="xai-source">{b}</div>' for b in p["data_bronnen"]])
+    factoren = "".join([f'<span class="xai-badge">{f}</span>' for f in p["sleutelfactoren"]])
+    return f"""
     <div class="xai-box">
-      <div class="xai-title">▼ Why was this created this way? <span class="xai-accent">(Explainable AI)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div class="xai-title">
+        ▼ Why was this created this way?
+        <span class="xai-accent">(Explainable AI)</span>
+        <span style="font-size:13px;color:#5a7090;margin-left:2px">ⓘ</span>
+      </div>
+      <div class="xai-grid">
         <div>
-          <div style="font-size:10px;color:#8B9CB8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Top databronnen</div>
-          {bronnen_html}
+          <div class="xai-col-label">Top data sources</div>
+          {bronnen}
         </div>
         <div>
-          <div style="font-size:10px;color:#8B9CB8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Sleutelfactoren</div>
-          {factoren_html}
+          <div class="xai-col-label">Key factors used</div>
+          {factoren}
         </div>
         <div>
-          <div style="font-size:10px;color:#8B9CB8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Uitleg</div>
-          <div class="xai-expl">{p["xai_uitleg"]}</div>
+          <div class="xai-col-label">Explanation</div>
+          <div class="xai-expl">{p['xai_uitleg']}</div>
+          <div class="xai-feedback">
+            <span class="xai-fb-label">Was this useful?</span>
+            <button class="feedback-btn">👎</button>
+            <button class="feedback-btn">👍</button>
+          </div>
         </div>
       </div>
-    </div>
-    """
+    </div>"""
 
 
 # ─────────────────────────────────────────────
-# GROQ API — SYNTHETIC USER + SCORE GENERATIE
+# GROQ API CALL
 # ─────────────────────────────────────────────
 def bouw_systeem_prompt(p: dict) -> str:
-    kwaliteit_instructie = ""
-    if p["kwaliteit"] == "slecht":
-        kwaliteit_instructie = """
-EXTRA INSTRUCTIE: Dit is een slecht opgesteld persona vol stereotypen en ontbrekende info.
-Reageer vager, gebruik soms onbewezen claims, en wees minder specifiek.
-Dit reflecteert een lage kwaliteitspersona — de scores moeten dit weerspiegelen."""
-
-    return f"""Je bent een cognitieve synthetic user agent genaamd "{p["naam"]}".
+    return f"""Je bent een cognitieve synthetic user agent genaamd "{p['naam']}".
 
 PERSONA PROFIEL:
-- Naam: {p["naam"]}
-- Leeftijd: {p["leeftijd"]} jaar
-- Geslacht: {p["geslacht"]}
-- Diagnose: {p["diagnose"]}
-- Kernquote: "{p["quote"]}"
-- Dagelijkse context: {p["context"]}
-- Doelen: {p["goals"]}
-- Frustraties: {p["frustrations"]}
-- Tech-comfort: {p["tech_support"]}
-- Kernthema's: {", ".join(p["tags"])}
-{kwaliteit_instructie}
+- Naam: {p['naam']}
+- Leeftijd: {p['leeftijd']} jaar
+- Geslacht: {p['geslacht']}
+- Diagnose: {p['diagnose']}
+- Kernquote: "{p['quote']}"
+- Dagelijkse context: {p['context']}
+- Doelen: {p['goals']}
+- Frustraties: {p['frustrations']}
+- Tech-comfort: {p['tech_support']}
+- Kernthema's: {", ".join(p['tags'])}
 
 GEDRAGSREGELS:
-1. Spreek ALTIJD in de eerste persoon als {p["naam"]}
+1. Spreek ALTIJD in de eerste persoon als {p['naam']}
 2. Reageer authentiek vanuit dit persona — niet als AI
 3. Noem specifieke ervaringen passend bij de aandoening
-4. Wees eerlijk over frustraties met technologie indien relevant
+4. Wees eerlijk over frustraties
 5. Houd antwoorden beknopt (2-4 zinnen) tenzij anders gevraagd
-6. Gebruik het taalregister van dit persona (leeftijd, opleiding, context)
+6. Gebruik het taalregister passend bij dit persona
 
-VERPLICHT NA ELK ANTWOORD:
-Voeg op een aparte laatste regel exact dit toe:
-SCORES:{{"bias":{{}}, "hallucinaties":{{}}, "inclusie":{{}}}}
-
-Waarbij je de getallen invult (0-100, waarbij 100 = geen probleem):
-- bias: Mate van stereotypering of vooringenomenheid in jouw respons (100 = volledig onbevooroordeeld)
-- hallucinaties: Feitelijke nauwkeurigheid en gronding in de persona (100 = volledig accuraat)
-- inclusie: Hoe goed dit persona een diverse doelgroep representeert (100 = uitstekend inclusief)
-
+VERPLICHT NA ELK ANTWOORD — voeg op een aparte laatste regel exact toe:
+SCORES:{{"bias": <0-100>, "hallucinaties": <0-100>, "inclusie": <0-100>}}
+(100 = geen probleem; bias = vrijheid van stereotypen; hallucinaties = feitelijke gronding; inclusie = representativiteit)
 Voorbeeld: SCORES:{{"bias": 88, "hallucinaties": 75, "inclusie": 82}}
 """
 
 
 def vraag_groq(client, persona: dict, vraag: str, geschiedenis: list) -> dict:
-    """Stel vraag aan Groq en parseer antwoord + scores."""
     systeem = bouw_systeem_prompt(persona)
-
     berichten = [{"role": "system", "content": systeem}]
-    for msg in geschiedenis[-16:]:  # max context
+    for msg in geschiedenis[-16:]:
         berichten.append(msg)
     berichten.append({"role": "user", "content": vraag})
 
@@ -571,36 +1172,26 @@ def vraag_groq(client, persona: dict, vraag: str, geschiedenis: list) -> dict:
             model="llama-3.3-70b-versatile",
             messages=berichten,
             temperature=0.75,
-            max_tokens=700,
+            max_tokens=600,
         )
         volledig = response.choices[0].message.content.strip()
 
-        # Parseer scores
-        scores = {"bias": 75, "hallucinaties": 70, "inclusie": 65}
-        import re
+        scores = {"bias": 75, "hallucinaties": 60, "inclusie": 70}
         match = re.search(r'SCORES:\s*(\{[^}]+\})', volledig)
         if match:
             try:
-                raw = match.group(1)
-                # Vervang Nederlandse sleutels indien nodig
-                parsed = json.loads(raw)
+                parsed = json.loads(match.group(1))
                 for k in ["bias", "hallucinaties", "inclusie"]:
                     if k in parsed and isinstance(parsed[k], (int, float)):
                         scores[k] = int(parsed[k])
             except Exception:
                 pass
 
-        # Verwijder scores-regel uit antwoord
         schoon = re.sub(r'\nSCORES:\s*\{[^}]+\}', '', volledig).strip()
         schoon = re.sub(r'SCORES:\s*\{[^}]+\}', '', schoon).strip()
-
         totaal = round((scores["bias"] + scores["hallucinaties"] + scores["inclusie"]) / 3)
 
-        return {
-            "tekst": schoon,
-            "scores": {**scores, "totaal": totaal},
-            "succes": True,
-        }
+        return {"tekst": schoon, "scores": {**scores, "totaal": totaal}, "succes": True}
 
     except Exception as e:
         return {
@@ -611,376 +1202,767 @@ def vraag_groq(client, persona: dict, vraag: str, geschiedenis: list) -> dict:
 
 
 # ─────────────────────────────────────────────
-# SESSION STATE INIT
+# SESSION STATE
 # ─────────────────────────────────────────────
-if "actieve_persona_id" not in st.session_state:
-    st.session_state.actieve_persona_id = 1
-if "chatgeschiedenis" not in st.session_state:
-    st.session_state.chatgeschiedenis = []
-if "api_berichten" not in st.session_state:
-    st.session_state.api_berichten = []
-if "scores" not in st.session_state:
-    st.session_state.scores = {"bias": 85, "hallucinaties": 62, "inclusie": 55, "totaal": 67}
-if "persona_kaart_getoond" not in st.session_state:
-    st.session_state.persona_kaart_getoond = False
-if "groq_api_key_input" not in st.session_state:
-    st.session_state.groq_api_key_input = ""
-if "rapport_open" not in st.session_state:
-    st.session_state.rapport_open = False
-if "berichtentelling" not in st.session_state:
-    st.session_state.berichtentelling = 0
+defaults = {
+    "actieve_persona_id": 1,
+    "actief_project_id": 2,
+    "actief_dataset_id": 1,
+    "chatgeschiedenis": [],
+    "api_berichten": [],
+    "scores": {"bias": 83, "hallucinaties": 73, "inclusie": 77, "totaal": 76},
+    "berichtentelling": 0,
+    "sidebar_mode": "personas",  # personas | persona_detail | datasets | projects
+    "panel_mode": None,           # None | validation | full_report | visualisatie
+    "mood_opties": {"Curious": True, "Confused": False, "Distrust": True, "Frustrated": False, "Hopeful": False, "Overstimulated": False},
+    "assign_opties": {"Designer 1": True, "Designer 2": False, "Designer 3": True, "Developer 1": False, "Developer 2": False, "Researcher 1": False},
+    "mood_open": False,
+    "assign_open": False,
+    "persona_kaart_getoond": False,
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 
 def get_actieve_persona():
     return next(p for p in PERSONAS if p["id"] == st.session_state.actieve_persona_id)
 
 
-def wissel_persona(persona_id: int):
-    if persona_id != st.session_state.actieve_persona_id:
-        st.session_state.actieve_persona_id = persona_id
+def wissel_persona(pid: int):
+    if pid != st.session_state.actieve_persona_id:
+        st.session_state.actieve_persona_id = pid
         st.session_state.chatgeschiedenis = []
         st.session_state.api_berichten = []
-        st.session_state.persona_kaart_getoond = False
         st.session_state.berichtentelling = 0
-        st.session_state.scores = {"bias": 85, "hallucinaties": 62, "inclusie": 55, "totaal": 67}
+        st.session_state.persona_kaart_getoond = False
+        st.session_state.scores = {"bias": 83, "hallucinaties": 73, "inclusie": 77, "totaal": 76}
+
+
+def reset_chat():
+    st.session_state.chatgeschiedenis = []
+    st.session_state.api_berichten = []
+    st.session_state.berichtentelling = 0
+    st.session_state.persona_kaart_getoond = False
+    st.session_state.scores = {"bias": 83, "hallucinaties": 73, "inclusie": 77, "totaal": 76}
 
 
 # ─────────────────────────────────────────────
 # TOPBAR
 # ─────────────────────────────────────────────
-st.markdown("""
+actieve_p = get_actieve_persona()
+scores = st.session_state.scores
+
+st.markdown(f"""
 <div class="topbar">
-  <div class="topbar-logo">
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-      <rect width="28" height="28" rx="6" fill="#1a4fa0"/>
-      <path d="M6 8h16M6 12h12M6 16h16M6 20h12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
-    Data Justice Assistent
+  <div class="tb-logo-wrap">
+    <div class="tb-logo-icon">
+      <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="6" fill="#1a4fa0"/>
+        <path d="M5 8h18M5 12h14M5 16h18M5 20h14" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <span class="tb-logo-text">Data Justice Assistent</span>
   </div>
-  <div style="margin-left:12px">
-    <div class="topbar-project">ReumaNederland Project</div>
-    <div class="topbar-sub">📚 ReumaNederland · Team 3</div>
+  <div class="tb-divider"></div>
+  <div class="tb-project-wrap">
+    <div class="tb-project-name">ReumaNederland Project</div>
+    <div class="tb-project-sub">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+        <ellipse cx="12" cy="5" rx="9" ry="3" stroke="#5a7090" stroke-width="1.5"/>
+        <path d="M3 5v14c0 1.657 4.03 3 9 3s9-1.343 9-3V5" stroke="#5a7090" stroke-width="1.5"/>
+        <path d="M3 12c0 1.657 4.03 3 9 3s9-1.343 9-3" stroke="#5a7090" stroke-width="1.5"/>
+      </svg>
+      ReumaNederland · Team 3
+    </div>
   </div>
-  <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
-    <span style="font-size:11px;color:#8B9CB8;background:#1a2438;border:1px solid #253047;border-radius:8px;padding:5px 12px">
-      ⚖️ Mood checker
-    </span>
-    <span style="font-size:11px;color:#8B9CB8;background:#1a2438;border:1px solid #253047;border-radius:8px;padding:5px 12px">
-      📋 Assign project
-    </span>
-    <span style="font-size:11px;color:white;background:#3B7EF6;border-radius:8px;padding:5px 14px;font-weight:600">
-      ↑ Export
-    </span>
+  <div class="tb-actions" id="tb-actions">
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Topbar buttons als Streamlit columns (rechtsboven)
+tb_col1, tb_col2, tb_col3, tb_col4, tb_col5 = st.columns([6, 1, 1, 1, 0.01])
+with tb_col2:
+    mood_label = "😊 Mood checker ∨" if not st.session_state.mood_open else "😊 Mood checker ∧"
+    if st.button(mood_label, key="tb_mood"):
+        st.session_state.mood_open = not st.session_state.mood_open
+        st.session_state.assign_open = False
+        st.rerun()
+with tb_col3:
+    assign_label = "📋 Assign project"
+    if st.button(assign_label, key="tb_assign"):
+        st.session_state.assign_open = not st.session_state.assign_open
+        st.session_state.mood_open = False
+        st.rerun()
+with tb_col4:
+    if st.button("↑ Export", key="tb_export", type="primary"):
+        export_data = {
+            "project": "ReumaNederland",
+            "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
+            "scores": st.session_state.scores,
+            "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
+        }
+        st.download_button(
+            "⬇ Download JSON",
+            data=json.dumps(export_data, indent=2, ensure_ascii=False),
+            file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
+            mime="application/json",
+            key="tb_download",
+        )
+
+# Mood checker dropdown
+if st.session_state.mood_open:
+    st.markdown("---")
+    st.markdown("**😊 Mood checker**")
+    mood_cols = st.columns(3)
+    moods = list(st.session_state.mood_opties.items())
+    for i, (mood, checked) in enumerate(moods):
+        col = mood_cols[i % 3]
+        with col:
+            new_val = st.checkbox(mood, value=checked, key=f"mood_{mood}")
+            st.session_state.mood_opties[mood] = new_val
+
+# Assign project dropdown
+if st.session_state.assign_open:
+    st.markdown("---")
+    st.markdown("**📋 Assign project**")
+    assign_cols = st.columns(3)
+    assigns = list(st.session_state.assign_opties.items())
+    for i, (name, checked) in enumerate(assigns):
+        col = assign_cols[i % 3]
+        with col:
+            new_val = st.checkbox(name, value=checked, key=f"assign_{name}")
+            st.session_state.assign_opties[name] = new_val
 
 
 # ─────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚖️ Data Justice Assistent")
-    st.markdown("---")
 
-    # API key invoer
-    st.markdown("### 🔑 Groq API Key")
-    api_key_input = st.text_input(
-        "API Key",
-        type="password",
-        value=st.session_state.groq_api_key_input,
-        placeholder="gsk_...",
-        label_visibility="collapsed",
-    )
-    if api_key_input:
-        st.session_state.groq_api_key_input = api_key_input
-
+    # Groq status
     client = get_groq_client()
     if client:
         st.markdown('<span style="color:#1DB87A;font-size:11px">✓ Groq verbonden (llama-3.3-70b)</span>', unsafe_allow_html=True)
     else:
-        st.markdown('<span style="color:#F59E0B;font-size:11px">⚠ Voer een Groq API key in</span>', unsafe_allow_html=True)
+        st.markdown('<span style="color:#F59E0B;font-size:11px">⚠ Voeg GROQ_API_KEY toe aan st.secrets</span>', unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
-    # Persona selectie
-    st.markdown("### 👤 Persona's")
-    st.markdown('<span style="font-size:10px;color:#8B9CB8">Research · ReumaNederland</span>', unsafe_allow_html=True)
+    # New Chat button
+    if st.button("+ New Chat", key="new_chat", use_container_width=True):
+        reset_chat()
+        st.session_state.sidebar_mode = "personas"
+        st.rerun()
 
-    for p in PERSONAS:
-        is_actief = p["id"] == st.session_state.actieve_persona_id
-        kwaliteitskleur = "#EF4444" if p["kwaliteit"] == "slecht" else "#3B7EF6"
-        rand_stijl = "rgba(59,126,246,.4)" if is_actief else "transparent"
-        achtergrond = "rgba(59,126,246,.1)" if is_actief else "transparent"
+    st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
-        col_btn, _ = st.columns([1, 0.01])
-        with col_btn:
-            if st.button(
-                f"{'✦ ' if is_actief else '  '}{p['naam']}  ·  {p['leeftijd']}jr",
-                key=f"persona_btn_{p['id']}",
-                use_container_width=True,
-            ):
+    # ── Sidebar mode: PERSONAS (default) ──
+    if st.session_state.sidebar_mode in ("personas", "persona_detail"):
+
+        st.markdown('<div class="sb-section-title">Persona\'s</div><span class="sb-section-sub">Research</span>', unsafe_allow_html=True)
+
+        for p in PERSONAS:
+            is_actief = p["id"] == st.session_state.actieve_persona_id
+            avatar_class = "sb-persona-avatar sb-persona-avatar-active" if is_actief else "sb-persona-avatar"
+            item_class = "sb-persona-item active" if is_actief else "sb-persona-item"
+            age_class = "sb-persona-age sb-persona-age-active" if is_actief else "sb-persona-age"
+
+            col_main, col_arr = st.columns([10, 1])
+            with col_main:
+                st.markdown(f"""
+                <div class="{item_class}">
+                  <div class="{avatar_class}">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="7" r="4" stroke="{'#5B9BFF' if is_actief else '#5a7090'}" stroke-width="1.5"/>
+                      <path d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8"
+                            stroke="{'#5B9BFF' if is_actief else '#5a7090'}" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div class="sb-persona-name">{p['naam']}</div>
+                    <div class="sb-persona-meta">{p['diagnose'][:24]}…</div>
+                  </div>
+                  <div class="{age_class}">{p['leeftijd_label']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if st.button("▷" if not is_actief else "▼", key=f"sel_persona_{p['id']}", help=f"Selecteer {p['naam']}"):
                 wissel_persona(p["id"])
+                st.session_state.sidebar_mode = "persona_detail" if is_actief else "personas"
                 st.rerun()
 
-    st.markdown("---")
+        st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
-    col_edit, col_gen = st.columns(2)
-    with col_edit:
-        st.button("✏️ Edit", use_container_width=True)
-    with col_gen:
-        st.button("✨ Genereer", use_container_width=True)
+        # Persona detail (expanded — screen 5 stijl)
+        if st.session_state.sidebar_mode == "persona_detail":
+            p = actieve_p
+            tags_html = "".join([f'<span class="sb-persona-exp-tag">{t}</span>' for t in p["tags"]])
+            st.markdown(f"""
+            <div class="sb-persona-expanded">
+              <div class="sb-persona-exp-header">
+                <img class="sb-persona-exp-photo" src="https://i.pravatar.cc/80?u={p['id']}"
+                     alt="{p['naam']}" onerror="this.style.background='#253047';this.src=''">
+                <div>
+                  <div class="sb-persona-exp-name">{p['naam']}
+                    <span style="font-size:10px;color:#5a7090;margin-left:4px">✎</span>
+                  </div>
+                  <div class="sb-persona-exp-diag">🔴 {p['diagnose']}</div>
+                </div>
+              </div>
+              <div class="sb-persona-exp-goals">
+                <span style="color:#8B9CB8;font-size:10px">🎯 stay active</span>
+                <span style="color:#8B9CB8;font-size:10px;margin-left:8px">💍 Married</span>
+                <span style="color:#8B9CB8;font-size:10px;margin-left:8px">💼 HR-Lead</span>
+              </div>
+              <div class="sb-persona-exp-tags">{tags_html}</div>
+              <div class="sb-persona-exp-quote">"{p['quote']}"</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    st.markdown("---")
+            col_save, col_regen = st.columns(2)
+            with col_save:
+                st.button("Save Persona's", key="save_persona", use_container_width=True)
+            with col_regen:
+                if st.button("(Re)Generate Persona's", key="regen_persona", use_container_width=True):
+                    st.session_state.sidebar_mode = "personas"
+                    st.rerun()
+        else:
+            col_edit, col_gen = st.columns(2)
+            with col_edit:
+                if st.button("Edit Persona's", key="edit_personas", use_container_width=True):
+                    st.session_state.sidebar_mode = "persona_detail"
+                    st.rerun()
+            with col_gen:
+                st.button("Generate Persona's", key="gen_personas", use_container_width=True)
 
-    # Dataset
-    st.markdown("### 🗃 Dataset")
+        st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+        # Dataset sectie
+        st.markdown('<div class="sb-section-title">Dataset</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="sb-dataset-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <ellipse cx="12" cy="5" rx="9" ry="3" stroke="#5a7090" stroke-width="1.5"/>
+            <path d="M3 5v14c0 1.657 4.03 3 9 3s9-1.343 9-3V5" stroke="#5a7090" stroke-width="1.5"/>
+            <path d="M3 12c0 1.657 4.03 3 9 3s9-1.343 9-3" stroke="#5a7090" stroke-width="1.5"/>
+          </svg>
+          Dataset_ReumaNederland
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Edit Dataset", key="edit_dataset", use_container_width=True):
+            st.session_state.sidebar_mode = "datasets"
+            st.rerun()
+
+        st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+        # Projects sectie
+        st.markdown('<div class="sb-section-title">Projects</div>', unsafe_allow_html=True)
+        for proj in PROJECTS:
+            is_active = proj["id"] == st.session_state.actief_project_id
+            cls = "sb-project-item active" if is_active else "sb-project-item"
+            st.markdown(f"""
+            <div class="{cls}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3" width="18" height="18" rx="2" stroke="{'#F1F5F9' if is_active else '#5a7090'}" stroke-width="1.5"/>
+                <path d="M9 9h6M9 12h6M9 15h4" stroke="{'#F1F5F9' if is_active else '#5a7090'}" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              {proj['naam']}
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(proj["naam"], key=f"proj_{proj['id']}", help=f"Selecteer {proj['naam']}"):
+                st.session_state.actief_project_id = proj["id"]
+                st.rerun()
+
+        st.markdown('<div class="sb-view-all">View all projects &gt;&gt;</div>', unsafe_allow_html=True)
+
+    # ── Sidebar mode: DATASETS (screen 6) ──
+    elif st.session_state.sidebar_mode == "datasets":
+        st.markdown('<div class="sb-section-title">Dataset</div>'
+                    '<span class="sb-section-sub">Project ReumaNederland</span>', unsafe_allow_html=True)
+
+        for ds in DATASETS:
+            is_active = ds["id"] == st.session_state.actief_dataset_id
+            st.markdown(f"""
+            <div style="background:{'#1a2438' if is_active else 'transparent'};border:1px solid {'#253047' if is_active else '#1C2A40'};
+                        border-radius:9px;padding:10px 12px;margin-bottom:6px;cursor:pointer">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#F1F5F9">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <ellipse cx="12" cy="5" rx="9" ry="3" stroke="#5a7090" stroke-width="1.5"/>
+                    <path d="M3 5v14c0 1.657 4.03 3 9 3s9-1.343 9-3V5" stroke="#5a7090" stroke-width="1.5"/>
+                    <path d="M3 12c0 1.657 4.03 3 9 3s9-1.343 9-3" stroke="#5a7090" stroke-width="1.5"/>
+                  </svg>
+                  {ds['naam']}
+                </div>
+                <div style="width:18px;height:18px;border-radius:3px;background:{'#3B7EF6' if is_active else 'transparent'};
+                            border:1px solid #253047;display:flex;align-items:center;justify-content:center">
+                  {'<span style="color:white;font-size:11px">✓</span>' if is_active else ''}
+                </div>
+              </div>
+              {''.join([f"<div style='font-size:10px;color:#8B9CB8;margin-top:4px;padding-left:21px'>• {b}</div>" for b in ds['bronnen']]) if is_active else ''}
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Select dataset {ds['id']}", key=f"ds_{ds['id']}", help=ds["naam"]):
+                st.session_state.actief_dataset_id = ds["id"]
+                st.rerun()
+
+        st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+        col_sv, col_ch = st.columns(2)
+        with col_sv:
+            if st.button("Save Dataset", key="save_ds", use_container_width=True):
+                st.session_state.sidebar_mode = "personas"
+                st.rerun()
+        with col_ch:
+            st.button("Check Dataset", key="check_ds", use_container_width=True)
+
+    # ── Sidebar mode: PROJECTS (screen 7) ──
+    elif st.session_state.sidebar_mode == "projects":
+        st.markdown('<div class="sb-section-title">Projects</div>'
+                    '<span class="sb-section-sub">Project ReumaNederland</span>', unsafe_allow_html=True)
+
+        for proj in PROJECTS:
+            is_active = proj["id"] == st.session_state.actief_project_id
+            st.markdown(f"""
+            <div style="background:{'#1a2438' if is_active else 'transparent'};border:1px solid {'#253047' if is_active else '#1C2A40'};
+                        border-radius:9px;padding:10px 12px;margin-bottom:6px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#F1F5F9">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="3" width="18" height="18" rx="2" stroke="{'#F1F5F9' if is_active else '#5a7090'}" stroke-width="1.5"/>
+                    <path d="M9 9h6M9 12h6M9 15h4" stroke="{'#F1F5F9' if is_active else '#5a7090'}" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                  {proj['naam']}
+                </div>
+                <div style="width:18px;height:18px;border-radius:50%;background:{'#3B7EF6' if is_active else '#1C2A40'};
+                            border:1px solid {'#3B7EF6' if is_active else '#253047'};display:flex;align-items:center;justify-content:center">
+                  {'<span style="color:white;font-size:10px">✓</span>' if is_active else ''}
+                </div>
+              </div>
+              {f"""<div style='font-size:10px;color:#8B9CB8;margin-top:5px;padding-left:21px'>
+                • {proj['personas']} Persona's<br>• Average rating {proj['rating']}%<br>• Exported {proj['exports']} times by team 2
+              </div>""" if is_active else ''}
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Select {proj['naam']}", key=f"proj_sel_{proj['id']}", help=proj["naam"]):
+                st.session_state.actief_project_id = proj["id"]
+                st.rerun()
+
+        # Nieuw project button
+        st.markdown("""
+        <div style="border:1px dashed #253047;border-radius:9px;padding:10px;
+                    text-align:center;font-size:20px;color:#253047;cursor:pointer;margin-top:4px">+</div>
+        """, unsafe_allow_html=True)
+        if st.button("+ Nieuw project", key="new_proj", use_container_width=True):
+            pass
+
+    # Sidebar footer (altijd)
+    st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
     st.markdown("""
-    <div style="background:#1a2438;border:1px solid #253047;border-radius:8px;
-                padding:8px 12px;font-size:12px;color:#8B9CB8;margin-bottom:8px;display:flex;gap:8px">
-      🗄 Dataset_ReumaNederland
-    </div>
-    """, unsafe_allow_html=True)
-    st.button("📝 Edit Dataset", use_container_width=True)
-
-    st.markdown("---")
-
-    # Projecten
-    st.markdown("### 📂 Projects")
-    for proj in ["ReumaNederland", "Project 1", "Project 3"]:
-        actief_proj = proj == "ReumaNederland"
-        st.markdown(
-            f'<div style="padding:6px 10px;border-radius:7px;font-size:12px;'
-            f'background:{"rgba(59,126,246,.08)" if actief_proj else "transparent"};'
-            f'color:{"#F1F5F9" if actief_proj else "#8B9CB8"};margin-bottom:3px">'
-            f'📋 {proj}</div>',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("---")
-
-    # Rapport knop
-    if st.button("📊 Bekijk Validatierapport", use_container_width=True):
-        st.session_state.rapport_open = not st.session_state.rapport_open
-
-    st.markdown("---")
-    st.markdown(
-        '<div style="font-size:11px;color:#8B9CB8">👤 Designer · Greenberry<br>'
-        '<span style="color:#3B7EF6">Groq llama-3.3-70b-versatile</span></div>',
-        unsafe_allow_html=True,
-    )
-
-
-# ─────────────────────────────────────────────
-# RAPPORT PANEEL (als uitgeklapt)
-# ─────────────────────────────────────────────
-actieve_p = get_actieve_persona()
-scores = st.session_state.scores
-
-if st.session_state.rapport_open:
-    st.markdown("---")
-    st.markdown("### 📊 Validation & Risk Overview")
-
-    col_ring, col_checks, col_verbeter = st.columns([1, 1.5, 1.5])
-
-    with col_ring:
-        st.markdown(teken_score_ring(scores["totaal"], "Totaalscore"), unsafe_allow_html=True)
-
-    with col_checks:
-        st.markdown("**Checks**")
-        for naam, key in [("Bias check", "bias"), ("Hallucinatie check", "hallucinaties"), ("Data Justice check", "inclusie")]:
-            s = scores[key]
-            kleur = score_kleur(s)
-            lbl = score_label(s)
-            st.markdown(
-                f'<div style="display:flex;justify-content:space-between;padding:8px 0;'
-                f'border-bottom:1px solid #253047;font-size:12px">'
-                f'<span style="color:#8B9CB8">{naam}</span>'
-                f'<span style="color:{kleur};font-weight:600">{s}% — {lbl}</span></div>',
-                unsafe_allow_html=True,
-            )
-        st.markdown(
-            f'<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:12px">'
-            f'<span style="color:#8B9CB8">Totaalscore</span>'
-            f'<span style="color:{score_kleur(scores["totaal"])};font-weight:700">{scores["totaal"]}%</span></div>',
-            unsafe_allow_html=True,
-        )
-
-    with col_verbeter:
-        st.markdown("**Verbeter AI input**")
-        verbeterpunten = [
-            ("📋 Voeg context toe", "Verbeter relevantie"),
-            ("🔑 Verfijn prompt", "Betere resultaten"),
-            ("📋 Check datakwaliteit", "Review dataset"),
-            ("⚠ Meld een probleem", "Help ons verbeteren"),
-        ]
-        for naam, actie in verbeterpunten:
-            st.markdown(
-                f'<div style="display:flex;justify-content:space-between;padding:7px 0;'
-                f'border-bottom:1px solid #253047;font-size:11px">'
-                f'<span style="color:#F1F5F9">{naam}</span>'
-                f'<span style="color:#8B9CB8">{actie}</span></div>',
-                unsafe_allow_html=True,
-            )
-
-    col_fix, col_export = st.columns(2)
-    with col_fix:
-        st.button("🔧 Fix issues", use_container_width=True)
-    with col_export:
-        if st.button("📤 Export rapport", use_container_width=True):
-            rapport_data = {
-                "persona": actieve_p["naam"],
-                "scores": st.session_state.scores,
-                "chatgeschiedenis": st.session_state.chatgeschiedenis,
-            }
-            st.download_button(
-                "⬇ Download JSON",
-                data=json.dumps(rapport_data, indent=2, ensure_ascii=False),
-                file_name=f"data_justice_rapport_{actieve_p['naam'].replace(' ', '_')}.json",
-                mime="application/json",
-            )
-    st.markdown("---")
-
-
-# ─────────────────────────────────────────────
-# CHAT WEERGAVE
-# ─────────────────────────────────────────────
-chat_container = st.container()
-
-with chat_container:
-    for bericht in st.session_state.chatgeschiedenis:
-        if bericht["rol"] == "assistent":
-            st.markdown(f"""
-            <div class="msg-wrap-bot">
-              <div class="msg-time">{bericht.get("tijd", "")}</div>
-              <div class="msg-sender">🤖 Synthetic User · {actieve_p["naam"]}</div>
-              <div class="bubble-bot">{bericht["inhoud"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if bericht.get("toon_persona_kaart"):
-                st.markdown(render_persona_card(actieve_p), unsafe_allow_html=True)
-
-        elif bericht["rol"] == "gebruiker":
-            st.markdown(f"""
-            <div class="msg-wrap-user">
-              <div class="msg-time">{bericht.get("tijd", "")}</div>
-              <div class="bubble-user">{bericht["inhoud"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        elif bericht["rol"] == "systeem":
-            st.markdown(f"""
-            <div class="msg-wrap-bot">
-              <div class="msg-sender">⚖️ Data Justice Assistent</div>
-              <div class="bubble-bot">{bericht["inhoud"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-
-# Welkomstbericht bij lege chat
-if not st.session_state.chatgeschiedenis:
-    st.markdown(f"""
-    <div class="msg-wrap-bot">
-      <div class="msg-time">Nu</div>
-      <div class="msg-sender">⚖️ Data Justice Assistent</div>
-      <div class="bubble-bot">
-        Hallo! Ik ben de <strong>Data Justice Assistent</strong>.<br><br>
-        Actieve synthetic user: <strong>{actieve_p["naam"]}</strong> ({actieve_p["leeftijd"]}jr, {actieve_p["diagnose"]}).<br><br>
-        Stel een vraag om de conversatie te starten. Elk antwoord wordt real-time geëvalueerd op
-        <strong>bias</strong>, <strong>hallucinaties</strong> en <strong>inclusie</strong>.
-        {'<br><br>⚠️ <span style="color:#F59E0B">Let op: dit persona heeft bekende kwaliteitsproblemen — ideaal om bias-detectie te testen!</span>' if actieve_p["kwaliteit"] == "slecht" else ""}
+    <div class="sb-footer">
+      <div class="sb-designer-avatar">DS</div>
+      <div>
+        <div class="sb-designer-name">Designer</div>
+        <div class="sb-designer-role">Greenberry</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# RELIABILITY BAR
+# MAIN CONTENT AREA
 # ─────────────────────────────────────────────
-def render_reliability_bar(scores: dict) -> str:
-    b, h, i = scores["bias"], scores["hallucinaties"], scores["inclusie"]
+# Bepaal of rechter validatie-panel open is
+panel_open = st.session_state.panel_mode is not None
 
-    def badge(s, lbl):
-        if s >= 80:
-            return f'<span class="rel-badge-green">✓ {lbl} — Laag</span>'
-        elif s >= 60:
-            return f'<span class="rel-badge-amber">⚠ {lbl} — Medium</span>'
-        return f'<span class="rel-badge-red">✗ {lbl} — Hoog</span>'
+if panel_open:
+    chat_col, panel_col = st.columns([2, 1])
+else:
+    chat_col = st.container()
+    panel_col = None
 
-    return f"""
-    <div class="rel-bar">
-      <span class="rel-label">ⓘ Reliability:</span>
-      {badge(h, "Hallucinaties")}
-      {badge(b, "Bias")}
-      {badge(i, "Data Justice")}
-      <span style="margin-left:auto;font-size:11px;color:#3B7EF6;cursor:pointer">View Full Report &gt;&gt;</span>
+
+# ── CHAT COLUMN ──
+with (chat_col if panel_open else st.container()):
+
+    # Chat scroll container
+    chat_html_parts = []
+
+    # Welkomstbericht (altijd bovenaan als chat leeg)
+    if not st.session_state.chatgeschiedenis:
+        chat_html_parts.append(f"""
+        <div class="chat-ts">Nu</div>
+        <div class="msg-bot-wrap">
+          <div class="msg-sender">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="14" rx="3" stroke="#5B9BFF" stroke-width="1.5"/>
+              <path d="M8 17v4M16 17v4M6 21h12" stroke="#5B9BFF" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Data Justice Assistent
+          </div>
+          <div class="bubble-bot">
+            Hallo! Ik ben de <strong>Data Justice Assistent</strong>.<br><br>
+            Actieve synthetic user: <strong>{actieve_p['naam']}</strong>
+            ({actieve_p['leeftijd']}jr, {actieve_p['diagnose']}).<br><br>
+            Stel een vraag om de conversatie te starten. Elk antwoord wordt geëvalueerd op
+            <strong>bias</strong>, <strong>hallucinaties</strong> en <strong>inclusie</strong>.
+          </div>
+        </div>
+        """)
+    else:
+        # Render chatgeschiedenis
+        vorig_ts = None
+        for msg in st.session_state.chatgeschiedenis:
+            ts = msg.get("tijd", "")
+            if ts != vorig_ts:
+                chat_html_parts.append(f'<div class="chat-ts">{ts}</div>')
+                vorig_ts = ts
+
+            if msg["rol"] == "gebruiker":
+                chat_html_parts.append(f"""
+                <div class="msg-user-wrap">
+                  <div style="display:flex;align-items:flex-end;gap:8px;justify-content:flex-end">
+                    <div class="bubble-user">{msg['inhoud']}</div>
+                    <div class="user-avatar">DS</div>
+                  </div>
+                </div>
+                """)
+
+            elif msg["rol"] == "assistent":
+                sub = f'<div class="msg-sender-sub">Here is your Persona based on the dataset: Reuma_Nederland</div>' if msg.get("toon_persona_kaart") else ""
+                chat_html_parts.append(f"""
+                <div class="msg-bot-wrap">
+                  <div class="msg-sender">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <rect x="3" y="3" width="18" height="14" rx="3" stroke="#5B9BFF" stroke-width="1.5"/>
+                      <path d="M8 17v4M16 17v4M6 21h12" stroke="#5B9BFF" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    Synthetic User · {actieve_p['naam']}
+                  </div>
+                  {sub}
+                  <div class="bubble-bot">{msg['inhoud']}</div>
+                </div>
+                """)
+                if msg.get("toon_persona_kaart"):
+                    chat_html_parts.append(render_persona_card(actieve_p))
+                    chat_html_parts.append(render_xai_box(actieve_p))
+
+            elif msg["rol"] == "systeem":
+                chat_html_parts.append(f"""
+                <div class="msg-bot-wrap">
+                  <div class="msg-sender">⚖️ Data Justice Assistent</div>
+                  <div class="bubble-bot">{msg['inhoud']}</div>
+                </div>
+                """)
+
+    # Render chat HTML in scrollable container
+    chat_html = "".join(chat_html_parts)
+    st.markdown(f"""
+    <div style="min-height:400px;padding:20px 24px;overflow-y:auto;
+                background:
+                  radial-gradient(ellipse at 75% 30%, rgba(26,79,160,0.18) 0%, transparent 55%),
+                  radial-gradient(ellipse at 90% 80%, rgba(59,126,246,0.08) 0%, transparent 40%),
+                  #0B1220;
+                ">
+    {chat_html}
     </div>
-    """
+    """, unsafe_allow_html=True)
 
+    # ── Reliability bar ──
+    b_score = scores["bias"]
+    h_score = scores["hallucinaties"]
+    i_score = scores["inclusie"]
 
-st.markdown(render_reliability_bar(scores), unsafe_allow_html=True)
+    h_lbl = f"Hallucination — {'Low' if h_score >= 75 else 'Medium' if h_score >= 50 else 'High'}"
+    b_lbl = f"Bias — {'Low' if b_score >= 75 else 'Medium' if b_score >= 50 else 'High'}"
+    i_lbl = f"Data Justice — {'Needs Review' if i_score < 75 else 'Good'}"
 
+    st.markdown(f"""
+    <div class="rel-bar">
+      <span class="rel-label">ⓘ Reliability :</span>
+      <span class="rel-badge {badge_class(h_score)}">{badge_icon(h_score)} {h_lbl}</span>
+      <span class="rel-badge {badge_class(b_score)}">{badge_icon(b_score)} {b_lbl}</span>
+      <span class="rel-badge {badge_class(i_score)}">{badge_icon(i_score)} {i_lbl}</span>
+      <span class="rel-view">View Full Report &gt;&gt;</span>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-# INPUT FORMULIER
-# ─────────────────────────────────────────────
-st.markdown("---")
+    # ── Input ──
+    st.markdown("""
+    <div style="padding:4px 0 0 0">
+      <div style="font-size:11px;color:#5a7090;padding:10px 24px 4px">Ask the Synthetic User</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-with st.form("chat_form", clear_on_submit=True):
-    col_spark, col_input, col_btn = st.columns([0.05, 1, 0.12])
-
-    with col_spark:
-        st.markdown('<div style="font-size:22px;color:#3B7EF6;padding-top:6px">✦</div>', unsafe_allow_html=True)
-
-    with col_input:
-        gebruiker_vraag = st.text_input(
-            "Vraag",
+    input_c1, input_c2, input_c3 = st.columns([0.04, 1, 0.12])
+    with input_c1:
+        st.markdown('<div style="font-size:22px;color:#3B7EF6;padding-top:8px;text-align:center">✦</div>', unsafe_allow_html=True)
+    with input_c2:
+        user_input = st.text_input(
+            "vraag",
             placeholder="Ask the Synthetic User...",
             label_visibility="collapsed",
+            key="chat_input_field",
         )
+    with input_c3:
+        send_clicked = st.button("➤ Send", key="send_btn", type="primary", use_container_width=True)
 
-    with col_btn:
-        versturen = st.form_submit_button("Send ➤", use_container_width=True)
+    # View Full Report link → open validation panel
+    rel_bar_c1, rel_bar_c2 = st.columns([3, 1])
+    with rel_bar_c2:
+        col_val, col_rep = st.columns(2)
+        with col_val:
+            if st.button("📊 Validation", key="btn_val"):
+                st.session_state.panel_mode = "validation" if st.session_state.panel_mode != "validation" else None
+                st.rerun()
+        with col_rep:
+            if st.button("📋 Full Report", key="btn_report"):
+                st.session_state.panel_mode = "full_report" if st.session_state.panel_mode != "full_report" else None
+                st.rerun()
+
+    # Score detail expander
+    if st.session_state.berichtentelling > 0:
+        with st.expander("📈 Score detail — laatste evaluatie", expanded=False):
+            sc1, sc2, sc3, sc4 = st.columns(4)
+            for col, val, naam, beschr in [
+                (sc1, scores["bias"], "Bias", "Stereotypering"),
+                (sc2, scores["hallucinaties"], "Hallucinaties", "Feitelijkheid"),
+                (sc3, scores["inclusie"], "Inclusie", "Representativiteit"),
+                (sc4, scores["totaal"], "Totaal", "Gecombineerd"),
+            ]:
+                with col:
+                    kleur = score_kleur(val)
+                    st.markdown(f"""
+                    <div class="metric-card">
+                      <div class="metric-val" style="color:{kleur}">{val}%</div>
+                      <div class="metric-lbl">{naam}</div>
+                      <div style="font-size:9px;color:#8B9CB8;margin-top:2px">{beschr}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        if st.button("📥 Download gesprek (JSON)", key="dl_chat"):
+            export = {
+                "project": "ReumaNederland",
+                "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
+                "scores": st.session_state.scores,
+                "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
+            }
+            st.download_button(
+                label="⬇ Download",
+                data=json.dumps(export, indent=2, ensure_ascii=False),
+                file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
+                mime="application/json",
+                key="dl_chat_btn",
+            )
+
+
+# ── VALIDATION / REPORT PANEL (screen 9, 10, 11) ──
+if panel_open and panel_col is not None:
+    with panel_col:
+
+        if st.session_state.panel_mode == "validation":
+            # Screen 9: Validation & Risk overview
+            totaal = scores["totaal"]
+            st.markdown(f"""
+            <div class="val-panel">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <span class="val-panel-title">Validation &amp; Risk overview</span>
+                <button class="panel-close" onclick="">✕</button>
+              </div>
+              <div class="val-check-row">
+                <span class="val-check-label">Bias check</span>
+                <span class="val-check-ok">Details &gt;&gt;</span>
+              </div>
+              <div class="val-check-row">
+                <span class="val-check-label">Hallucination check</span>
+                <span class="val-check-warn">Needs review &gt;&gt;</span>
+              </div>
+              <div class="val-check-row">
+                <span class="val-check-label">Data Justice check</span>
+                <span class="val-check-med">Medium Risk &gt;&gt;</span>
+              </div>
+              <div class="score-ring-wrap">
+                {score_ring_svg(totaal, 90)}
+                <div class="score-legend">
+                  <div class="score-legend-good">Good</div>
+                  <div class="score-legend-improve">Room for improvement</div>
+                  <div class="score-legend-link">Details &gt;&gt;</div>
+                </div>
+              </div>
+              <div class="improve-title">Improve AI input</div>
+              <div class="improve-row">
+                <span><span class="improve-icon">📋</span><span class="improve-label">Add more context</span></span>
+                <span class="improve-action">Improve relevance</span>
+              </div>
+              <div class="improve-row">
+                <span><span class="improve-icon">🔑</span><span class="improve-label">Refine Prompt</span></span>
+                <span class="improve-action">Get better results</span>
+              </div>
+              <div class="improve-row">
+                <span><span class="improve-icon">📋</span><span class="improve-label">Review data quality</span></span>
+                <span class="improve-action">Check dataset</span>
+              </div>
+              <div class="improve-row" style="border-bottom:none">
+                <span><span class="improve-icon">⚠</span><span class="improve-label">Report an issue</span></span>
+                <span class="improve-action">Help us improve</span>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            close_c, export_c = st.columns(2)
+            with close_c:
+                if st.button("Fix issues %", key="fix_issues", use_container_width=True):
+                    pass
+            with export_c:
+                if st.button("Export report", key="exp_report_val", use_container_width=True, type="primary"):
+                    st.session_state.panel_mode = "full_report"
+                    st.rerun()
+            if st.button("✕ Sluit panel", key="close_val", use_container_width=True):
+                st.session_state.panel_mode = None
+                st.rerun()
+
+        elif st.session_state.panel_mode == "full_report":
+            # Screen 10: Full report met progress bars
+            h = scores["hallucinaties"]
+            b = scores["bias"]
+            i = scores["inclusie"]
+
+            def fr_bar(pct, kleur):
+                return f'<div class="fr-bar-bg"><div class="fr-bar-fill" style="width:{pct}%;background:{kleur}"></div></div>'
+
+            st.markdown(f"""
+            <div class="val-panel">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <span class="val-panel-title">Full report</span>
+                <button class="panel-close">✕</button>
+              </div>
+
+              <div class="fr-section">
+                <div class="fr-cat-title">
+                  Hallucination <span class="fr-pct">{100 - h} %</span>
+                </div>
+                {fr_bar(100 - h, '#F59E0B')}
+                <div class="fr-item">⚠ Lorem Ipsum</div>
+                <div class="fr-item">✓ Lorem Ipsum</div>
+                <div class="fr-item">ⓘ Lorem Ipsum</div>
+                <div class="fr-details-link">Details &gt;&gt;</div>
+              </div>
+
+              <div class="fr-section">
+                <div class="fr-cat-title">
+                  Bias <span class="fr-pct">{100 - b} %</span>
+                </div>
+                {fr_bar(100 - b, '#1DB87A')}
+                <div class="fr-item">⚠ Lorem Ipsum</div>
+                <div class="fr-item">✓ Lorem Ipsum</div>
+                <div class="fr-item">ⓘ Lorem Ipsum</div>
+                <div class="fr-details-link">Details &gt;&gt;</div>
+              </div>
+
+              <div class="fr-section">
+                <div class="fr-cat-title">
+                  Data Justice <span class="fr-pct">{i} %</span>
+                </div>
+                {fr_bar(i, '#3B7EF6')}
+                <div class="fr-item">⚠ Lorem Ipsum</div>
+                <div class="fr-item">✓ Lorem Ipsum</div>
+                <div class="fr-item">ⓘ Lorem Ipsum</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            fix_c, exp_c = st.columns(2)
+            with fix_c:
+                st.button("Fix issues %", key="fix_fr", use_container_width=True)
+            with exp_c:
+                if st.button("Export report", key="exp_fr", use_container_width=True, type="primary"):
+                    rapport = {
+                        "persona": actieve_p["naam"],
+                        "scores": st.session_state.scores,
+                        "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
+                    }
+                    st.download_button(
+                        "⬇ JSON",
+                        data=json.dumps(rapport, indent=2, ensure_ascii=False),
+                        file_name=f"rapport_{actieve_p['naam'].replace(' ', '_')}.json",
+                        mime="application/json",
+                        key="dl_rapport",
+                    )
+            if st.button("✕ Sluit panel", key="close_fr", use_container_width=True):
+                st.session_state.panel_mode = None
+                st.rerun()
+
+        elif st.session_state.panel_mode == "visualisatie":
+            # Screen 11: Visualisatie + Suggestions
+            totaal = scores["totaal"]
+            st.markdown(f"""
+            <div class="val-panel">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <span class="val-panel-title">Full report</span>
+                <button class="panel-close">✕</button>
+              </div>
+              <div class="fr-section">
+                <div class="fr-cat-title">Hallucination <span class="fr-pct">{100 - scores['hallucinaties']} %</span></div>
+                <div class="fr-bar-bg"><div class="fr-bar-fill" style="width:{100-scores['hallucinaties']}%;background:#F59E0B"></div></div>
+                <div class="fr-item">⚠ Lorem Ipsum</div>
+                <div class="fr-item">✓ Lorem Ipsum</div>
+                <div class="fr-item">ⓘ Lorem Ipsum</div>
+                <div class="fr-details-link">Details &gt;&gt;</div>
+              </div>
+              <div class="vis-section">
+                <div class="vis-title">Visualisatie</div>
+                <div class="vis-ring-wrap">
+                  {score_ring_svg(totaal, 80)}
+                  <div class="score-legend">
+                    <div class="score-legend-good">Good</div>
+                    <div class="score-legend-improve">Room for improvement</div>
+                    <div class="score-legend-link">Lorem Ipsum</div>
+                  </div>
+                </div>
+                <div class="suggestions-title">Suggestions</div>
+                <div class="suggestion-item"><span class="suggestion-star">✦</span> Lorem Ipsum</div>
+                <div class="suggestion-item"><span class="suggestion-star">✦</span> Lorem Ipsum</div>
+                <div class="suggestion-item"><span class="suggestion-star">✦</span> Lorem Ipsum</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            fix_c2, exp_c2 = st.columns(2)
+            with fix_c2:
+                st.button("Fix issues %", key="fix_vis", use_container_width=True)
+            with exp_c2:
+                st.button("Export report", key="exp_vis", use_container_width=True, type="primary")
+            if st.button("✕ Sluit panel", key="close_vis", use_container_width=True):
+                st.session_state.panel_mode = None
+                st.rerun()
 
 
 # ─────────────────────────────────────────────
 # BERICHTVERWERKING
 # ─────────────────────────────────────────────
-if versturen and gebruiker_vraag.strip():
+if send_clicked and user_input.strip():
     if not client:
-        st.error("⚠️ Voer eerst een geldige Groq API key in de sidebar in.")
+        st.warning("⚠️ Voeg een geldige GROQ_API_KEY toe aan .streamlit/secrets.toml of als omgevingsvariabele.")
     else:
         nu = time.strftime("%H:%M")
-        actieve_p = get_actieve_persona()
+        eerste_bericht = st.session_state.berichtentelling == 0
 
-        # Sla gebruikersbericht op
         st.session_state.chatgeschiedenis.append({
             "rol": "gebruiker",
-            "inhoud": gebruiker_vraag.strip(),
+            "inhoud": user_input.strip(),
             "tijd": nu,
         })
 
-        # Eerste bericht: toon persona-kaart intro
-        eerste_bericht = st.session_state.berichtentelling == 0
-
         with st.spinner("Synthetic User denkt na..."):
-            resultaat = vraag_groq(
-                client,
-                actieve_p,
-                gebruiker_vraag.strip(),
-                st.session_state.api_berichten,
-            )
+            resultaat = vraag_groq(client, actieve_p, user_input.strip(), st.session_state.api_berichten)
 
-        # Update API-geschiedenis
-        st.session_state.api_berichten.append(
-            {"role": "user", "content": gebruiker_vraag.strip()}
-        )
-        st.session_state.api_berichten.append(
-            {"role": "assistant", "content": resultaat["tekst"]}
-        )
+        st.session_state.api_berichten.append({"role": "user", "content": user_input.strip()})
+        st.session_state.api_berichten.append({"role": "assistant", "content": resultaat["tekst"]})
 
-        # Sla antwoord op
         st.session_state.chatgeschiedenis.append({
             "rol": "assistent",
             "inhoud": resultaat["tekst"],
@@ -988,66 +1970,8 @@ if versturen and gebruiker_vraag.strip():
             "toon_persona_kaart": eerste_bericht,
         })
 
-        # Update scores
         if resultaat["succes"]:
             st.session_state.scores = resultaat["scores"]
 
         st.session_state.berichtentelling += 1
         st.rerun()
-
-
-# ─────────────────────────────────────────────
-# SCORE DETAIL SECTIE (altijd zichtbaar na gesprek)
-# ─────────────────────────────────────────────
-if st.session_state.berichtentelling > 0:
-    with st.expander("📈 Score detail — laatste evaluatie", expanded=False):
-        col_b, col_h, col_i, col_t = st.columns(4)
-        score_data = [
-            (col_b, scores["bias"], "Bias", "Mate van stereotypering"),
-            (col_h, scores["hallucinaties"], "Hallucinaties", "Feitelijke nauwkeurigheid"),
-            (col_i, scores["inclusie"], "Inclusie", "Representativiteit"),
-            (col_t, scores["totaal"], "Totaal", "Gecombineerde score"),
-        ]
-        for col, val, naam, beschr in score_data:
-            with col:
-                kleur = score_kleur(val)
-                st.markdown(
-                    f'<div class="metric-card">'
-                    f'<div class="metric-val" style="color:{kleur}">{val}%</div>'
-                    f'<div class="metric-lbl">{naam}</div>'
-                    f'<div style="font-size:9px;color:#8B9CB8;margin-top:3px">{beschr}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-        st.markdown("""
-        <div style="margin-top:14px;padding:12px;background:#1a2438;border:1px solid #253047;border-radius:8px;font-size:11px;color:#8B9CB8">
-          <strong style="color:#5B9BFF">Scoringsmethode (LangGraph-geïnspireerd):</strong><br>
-          De synthetic user genereert zelf een score op basis van zijn eigen respons.
-          Bias = vrijheid van stereotypen; Hallucinaties = feitelijke gronding in het persona;
-          Inclusie = hoe goed de respons een diverse doelgroep vertegenwoordigt.
-          Scores worden berekend door llama-3.3-70b-versatile en zijn indicatief.
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Export knop
-    if st.button("📥 Download gesprek (JSON)"):
-        export = {
-            "project": "ReumaNederland",
-            "persona": {
-                "naam": actieve_p["naam"],
-                "leeftijd": actieve_p["leeftijd"],
-                "diagnose": actieve_p["diagnose"],
-            },
-            "laatste_scores": st.session_state.scores,
-            "chatgeschiedenis": [
-                {"rol": m["rol"], "inhoud": m["inhoud"]}
-                for m in st.session_state.chatgeschiedenis
-            ],
-        }
-        st.download_button(
-            label="⬇ Download",
-            data=json.dumps(export, indent=2, ensure_ascii=False),
-            file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
-            mime="application/json",
-        )
