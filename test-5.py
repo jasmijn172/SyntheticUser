@@ -1894,6 +1894,7 @@ with (chat_col if panel_open else st.container()):
                 (sc2, scores["hallucinaties"], "Hallucinaties", "Feitelijkheid"),
                 (sc3, scores["inclusie"], "Inclusie", "Representativiteit"),
                 (sc4, scores["totaal"], "Totaal", "Gecombineerd"),
+                
          with col:
                     kleur = score_kleur(val)
                     st.markdown(f"""
