@@ -16,7 +16,6 @@ import re
 
 
 
-
 # def getgroqclient():
 #     api_key = st.secrets.get("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") or os.environ.get("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")
 #     if not api_key:
