@@ -52,12 +52,12 @@ section[data-testid="stSidebar"] {
 section[data-testid="stSidebar"] > div:first-child {
     padding: 14px 14px 14px 14px !important;
 }
-section[data-testid="stSidebar"] .stMarkdown p,
-section[data-testid="stSidebar"] label {
-    color: #8B9CB8 !important;
-    font-size: 12px !important;
-    font-family: 'DM Sans', sans-serif !important;
-}
+# section[data-testid="stSidebar"] .stMarkdown p,
+# section[data-testid="stSidebar"] label {
+#     color: #8B9CB8 !important;
+#     font-size: 12px !important;
+#     font-family: 'DM Sans', sans-serif !important;
+# }
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 {
