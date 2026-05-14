@@ -1994,7 +1994,7 @@ import os
 import time
 import math
 import re
-
+from groq import Groq
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
@@ -3225,6 +3225,8 @@ def vraag_groq(client, persona: dict, vraag: str, geschiedenis: list) -> dict:
 
         schoon = re.sub(r'\nSCORES:\s*\{[^}]+\}', '', volledig).strip()
         schoon = re.sub(r'SCORES:\s*\{[^}]+\}', '', schoon).strip()
+        # Verwijder eventuele resterende accolades die HTML kunnen breken
+        schoon = schoon.replace("{", "&#123;").replace("}", "&#125;")
         totaal = round((scores["bias"] + scores["hallucinaties"] + scores["inclusie"]) / 3)
 
         return {"tekst": schoon, "scores": {**scores, "totaal": totaal}, "succes": True}
@@ -3712,12 +3714,18 @@ else:
 # ── CHAT COLUMN ──
 with (chat_col if panel_open else st.container()):
 
-    # Chat scroll container
-    chat_html_parts = []
+    # Chat achtergrond wrapper open
+    st.markdown("""
+    <div id="chat-scroll" style="min-height:400px;padding:20px 24px 8px;
+        background:
+          radial-gradient(ellipse at 75% 30%, rgba(26,79,160,0.18) 0%, transparent 55%),
+          radial-gradient(ellipse at 90% 80%, rgba(59,126,246,0.08) 0%, transparent 40%),
+          #0B1220;">
+    """, unsafe_allow_html=True)
 
-    # Welkomstbericht (altijd bovenaan als chat leeg)
+    # Welkomstbericht
     if not st.session_state.chatgeschiedenis:
-        chat_html_parts.append(f"""
+        st.markdown(f"""
         <div class="chat-ts">Nu</div>
         <div class="msg-bot-wrap">
           <div class="msg-sender">
@@ -3735,29 +3743,31 @@ with (chat_col if panel_open else st.container()):
             <strong>bias</strong>, <strong>hallucinaties</strong> en <strong>inclusie</strong>.
           </div>
         </div>
-        """)
+        """, unsafe_allow_html=True)
     else:
-        # Render chatgeschiedenis
         vorig_ts = None
         for msg in st.session_state.chatgeschiedenis:
             ts = msg.get("tijd", "")
             if ts != vorig_ts:
-                chat_html_parts.append(f'<div class="chat-ts">{ts}</div>')
+                st.markdown(f'<div class="chat-ts">{ts}</div>', unsafe_allow_html=True)
                 vorig_ts = ts
 
             if msg["rol"] == "gebruiker":
-                chat_html_parts.append(f"""
+                # Inhoud veilig escapen voor HTML
+                inhoud = str(msg["inhoud"]).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                st.markdown(f"""
                 <div class="msg-user-wrap">
                   <div style="display:flex;align-items:flex-end;gap:8px;justify-content:flex-end">
-                    <div class="bubble-user">{msg['inhoud']}</div>
+                    <div class="bubble-user">{inhoud}</div>
                     <div class="user-avatar">DS</div>
                   </div>
                 </div>
-                """)
+                """, unsafe_allow_html=True)
 
             elif msg["rol"] == "assistent":
-                sub = f'<div class="msg-sender-sub">Here is your Persona based on the dataset: Reuma_Nederland</div>' if msg.get("toon_persona_kaart") else ""
-                chat_html_parts.append(f"""
+                inhoud = str(msg["inhoud"]).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                sub = '<div class="msg-sender-sub">Here is your Persona based on the dataset: Reuma_Nederland</div>' if msg.get("toon_persona_kaart") else ""
+                st.markdown(f"""
                 <div class="msg-bot-wrap">
                   <div class="msg-sender">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -3767,33 +3777,24 @@ with (chat_col if panel_open else st.container()):
                     Synthetic User · {actieve_p['naam']}
                   </div>
                   {sub}
-                  <div class="bubble-bot">{msg['inhoud']}</div>
+                  <div class="bubble-bot">{inhoud}</div>
                 </div>
-                """)
+                """, unsafe_allow_html=True)
                 if msg.get("toon_persona_kaart"):
-                    chat_html_parts.append(render_persona_card(actieve_p))
-                    chat_html_parts.append(render_xai_box(actieve_p))
+                    st.markdown(render_persona_card(actieve_p), unsafe_allow_html=True)
+                    st.markdown(render_xai_box(actieve_p), unsafe_allow_html=True)
 
             elif msg["rol"] == "systeem":
-                chat_html_parts.append(f"""
+                inhoud = str(msg["inhoud"]).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                st.markdown(f"""
                 <div class="msg-bot-wrap">
                   <div class="msg-sender">⚖️ Data Justice Assistent</div>
-                  <div class="bubble-bot">{msg['inhoud']}</div>
+                  <div class="bubble-bot">{inhoud}</div>
                 </div>
-                """)
+                """, unsafe_allow_html=True)
 
-    # Render chat HTML in scrollable container
-    chat_html = "".join(chat_html_parts)
-    st.markdown(f"""
-    <div style="min-height:400px;padding:20px 24px;overflow-y:auto;
-                background:
-                  radial-gradient(ellipse at 75% 30%, rgba(26,79,160,0.18) 0%, transparent 55%),
-                  radial-gradient(ellipse at 90% 80%, rgba(59,126,246,0.08) 0%, transparent 40%),
-                  #0B1220;
-                ">
-    {chat_html}
-    </div>
-    """, unsafe_allow_html=True)
+    # Chat wrapper sluiten
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Input (boven reliability bar) ──
     st.markdown("""
