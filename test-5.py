@@ -1994,6 +1994,7 @@ import os
 import time
 import math
 import re
+from groq import Groq
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
@@ -3288,66 +3289,97 @@ def reset_chat():
 actieve_p = get_actieve_persona()
 scores = st.session_state.scores
 
-# Mood/Assign arrow labels
+# CSS: trek de eerste horizontale Streamlit-kolomrij omhoog in de topbar
+st.markdown("""
+<style>
+/* ── Topbar HTML ── */
+.topbar {
+    background: #111827;
+    border-bottom: 1px solid #1C2A40;
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    z-index: 10;
+    pointer-events: none;  /* knoppen erin zijn HTML, Streamlit knoppen zitten erover */
+}
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    pointer-events: auto;
+}
+
+/* Trek de Streamlit knoppenrij (eerste stHorizontalBlock na topbar)
+   omhoog zodat ze visueel in de topbar vallen */
+div[data-testid="stMainBlockContainer"] > div > div > div[data-testid="stVerticalBlock"]
+> div[data-testid="stHorizontalBlock"]:first-of-type {
+    background: #111827 !important;
+    border-bottom: 1px solid #1C2A40 !important;
+    margin-top: -56px !important;
+    padding: 0 24px 0 0 !important;
+    height: 56px !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    position: relative !important;
+    z-index: 20 !important;
+}
+
+/* Verberg de lege spacer kolom visueel */
+div[data-testid="stMainBlockContainer"] > div > div > div[data-testid="stVerticalBlock"]
+> div[data-testid="stHorizontalBlock"]:first-of-type
+> div[data-testid="column"]:first-child {
+    flex: 0 0 0 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+}
+
+/* Topbar Streamlit knoppen styling */
+div[data-testid="stMainBlockContainer"] > div > div > div[data-testid="stVerticalBlock"]
+> div[data-testid="stHorizontalBlock"]:first-of-type button {
+    background: #111827 !important;
+    border: 1px solid #253047 !important;
+    border-radius: 8px !important;
+    color: #8B9CB8 !important;
+    font-size: 12px !important;
+    font-family: 'DM Sans', sans-serif !important;
+    padding: 6px 13px !important;
+    height: 34px !important;
+    white-space: nowrap !important;
+    font-weight: 400 !important;
+    transition: all 0.15s !important;
+}
+div[data-testid="stMainBlockContainer"] > div > div > div[data-testid="stVerticalBlock"]
+> div[data-testid="stHorizontalBlock"]:first-of-type button:hover {
+    border-color: #3B7EF6 !important;
+    color: #F1F5F9 !important;
+}
+div[data-testid="stMainBlockContainer"] > div > div > div[data-testid="stVerticalBlock"]
+> div[data-testid="stHorizontalBlock"]:first-of-type button[kind="primary"] {
+    background: #3B7EF6 !important;
+    border-color: #3B7EF6 !important;
+    color: white !important;
+    font-weight: 600 !important;
+}
+div[data-testid="stMainBlockContainer"] > div > div > div[data-testid="stVerticalBlock"]
+> div[data-testid="stHorizontalBlock"]:first-of-type button[kind="primary"]:hover {
+    background: #5B9BFF !important;
+    border-color: #5B9BFF !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# HTML topbar — alleen logo + projectnaam (geen knoppen)
 mood_arrow = "∧" if st.session_state.mood_open else "∨"
 assign_arrow = "∧" if st.session_state.assign_open else "∨"
 
-# Lees query params voor topbar knop-clicks (HTML form submit)
-_qp = st.query_params
-if _qp.get("tb_action") == "mood":
-    st.session_state.mood_open = not st.session_state.mood_open
-    st.session_state.assign_open = False
-    st.query_params.clear()
-    st.rerun()
-elif _qp.get("tb_action") == "assign":
-    st.session_state.assign_open = not st.session_state.assign_open
-    st.session_state.mood_open = False
-    st.query_params.clear()
-    st.rerun()
-elif _qp.get("tb_action") == "export":
-    st.query_params.clear()
-    # export wordt hieronder afgehandeld
-
-# Topbar volledig in HTML — knoppen gebruiken window.location voor state toggle
 st.markdown(f"""
-<style>
-/* Verberg de fallback Streamlit knop-rij volledig */
-div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:first-child > div[data-testid="stVerticalBlockBorderWrapper"]:empty) {{
-    display: none !important;
-}}
-/* Topbar container mag niet door Streamlit padding worden beïnvloed */
-.topbar {{
-    position: relative;
-    z-index: 200;
-}}
-.tb-nav-btn {{
-    background: #111827;
-    border: 1px solid #253047;
-    border-radius: 8px;
-    color: #8B9CB8;
-    font-size: 12px;
-    font-family: 'DM Sans', sans-serif;
-    padding: 7px 14px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.15s;
-    white-space: nowrap;
-    text-decoration: none;
-}}
-.tb-nav-btn:hover {{ border-color: #3B7EF6; color: #F1F5F9; }}
-.tb-nav-btn-primary {{
-    background: #3B7EF6;
-    border-color: #3B7EF6;
-    color: white !important;
-    font-weight: 600;
-}}
-.tb-nav-btn-primary:hover {{ background: #5B9BFF; border-color: #5B9BFF; }}
-</style>
-
 <div class="topbar">
-  <div class="tb-logo-wrap">
+  <div class="topbar-left">
     <div class="tb-logo-icon">
       <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
         <rect width="28" height="28" rx="6" fill="#1a4fa0"/>
@@ -3355,80 +3387,77 @@ div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:first-child
       </svg>
     </div>
     <span class="tb-logo-text">Data Justice Assistent</span>
-  </div>
-  <div class="tb-divider"></div>
-  <div class="tb-project-wrap">
-    <div class="tb-project-name">ReumaNederland Project</div>
-    <div class="tb-project-sub">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-        <ellipse cx="12" cy="5" rx="9" ry="3" stroke="#5a7090" stroke-width="1.5"/>
-        <path d="M3 5v14c0 1.657 4.03 3 9 3s9-1.343 9-3V5" stroke="#5a7090" stroke-width="1.5"/>
-        <path d="M3 12c0 1.657 4.03 3 9 3s9-1.343 9-3" stroke="#5a7090" stroke-width="1.5"/>
-      </svg>
-      ReumaNederland · Team 3
+    <div class="tb-divider"></div>
+    <div class="tb-project-wrap">
+      <div class="tb-project-name">ReumaNederland Project</div>
+      <div class="tb-project-sub">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+          <ellipse cx="12" cy="5" rx="9" ry="3" stroke="#5a7090" stroke-width="1.5"/>
+          <path d="M3 5v14c0 1.657 4.03 3 9 3s9-1.343 9-3V5" stroke="#5a7090" stroke-width="1.5"/>
+          <path d="M3 12c0 1.657 4.03 3 9 3s9-1.343 9-3" stroke="#5a7090" stroke-width="1.5"/>
+        </svg>
+        ReumaNederland · Team 3
+      </div>
     </div>
-  </div>
-  <div class="tb-actions" style="margin-left:auto;display:flex;align-items:center;gap:10px">
-    <a class="tb-nav-btn" href="?tb_action=mood">
-      😊 Mood checker {'∧' if st.session_state.mood_open else '∨'}
-    </a>
-    <a class="tb-nav-btn" href="?tb_action=assign">
-      📋 Assign project {'∧' if st.session_state.assign_open else '∨'}
-    </a>
-    <a class="tb-nav-btn tb-nav-btn-primary" href="?tb_action=export">
-      ↑ Export
-    </a>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Export download (wordt geactiveerd als export query param eerder is ingesteld)
-if "tb_export_trigger" in st.session_state and st.session_state.tb_export_trigger:
-    st.session_state.tb_export_trigger = False
-    export_data = {
-        "project": "ReumaNederland",
-        "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
-        "scores": st.session_state.scores,
-        "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
-    }
-    st.download_button(
-        "⬇ Download JSON",
-        data=json.dumps(export_data, indent=2, ensure_ascii=False),
-        file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
-        mime="application/json",
-        key="tb_dl_trigger",
-    )
+# Streamlit knoppen — worden via CSS omhoog getrokken in de topbar
+_spacer, _col_mood, _col_assign, _col_export = st.columns([4.5, 1.3, 1.3, 0.7])
+with _col_mood:
+    if st.button(f"😊 Mood checker {mood_arrow}", key="tb_mood"):
+        st.session_state.mood_open = not st.session_state.mood_open
+        st.session_state.assign_open = False
+        st.rerun()
+with _col_assign:
+    if st.button(f"📋 Assign project {assign_arrow}", key="tb_assign"):
+        st.session_state.assign_open = not st.session_state.assign_open
+        st.session_state.mood_open = False
+        st.rerun()
+with _col_export:
+    if st.button("↑ Export", key="tb_export", type="primary"):
+        export_data = {
+            "project": "ReumaNederland",
+            "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
+            "scores": st.session_state.scores,
+            "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
+        }
+        st.download_button(
+            "⬇ Download JSON",
+            data=json.dumps(export_data, indent=2, ensure_ascii=False),
+            file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
+            mime="application/json",
+            key="tb_download",
+        )
 
-# Mood checker dropdown (onder topbar)
+# Mood checker dropdown
 if st.session_state.mood_open:
-    st.markdown("""
-    <div style="background:#1a2438;border:1px solid #253047;border-radius:0 0 10px 10px;
-                border-top:none;padding:10px 16px 12px;display:flex;flex-wrap:wrap;gap:6px 24px;
-                margin-top:-4px;">
-      <div style="width:100%;font-size:11px;font-weight:600;color:#8B9CB8;margin-bottom:4px;
-                  text-transform:uppercase;letter-spacing:.5px">Mood selectie</div>
-    </div>
-    """, unsafe_allow_html=True)
-    mood_cols = st.columns(6)
-    for i, (mood, checked) in enumerate(st.session_state.mood_opties.items()):
-        with mood_cols[i]:
-            new_val = st.checkbox(mood, value=checked, key=f"mood_{mood}")
-            st.session_state.mood_opties[mood] = new_val
+    with st.container():
+        st.markdown("""<div style="background:#1a2438;border:1px solid #253047;border-radius:10px;
+            padding:10px 16px 12px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:600;color:#8B9CB8;margin-bottom:8px;
+                      text-transform:uppercase;letter-spacing:.5px">😊 Mood selectie</div></div>""",
+            unsafe_allow_html=True)
+        mood_cols = st.columns(6)
+        for i, (mood, checked) in enumerate(st.session_state.mood_opties.items()):
+            with mood_cols[i]:
+                new_val = st.checkbox(mood, value=checked, key=f"mood_{mood}")
+                st.session_state.mood_opties[mood] = new_val
 
-# Assign project dropdown (onder topbar)
+# Assign project dropdown
 if st.session_state.assign_open:
-    st.markdown("""
-    <div style="background:#1a2438;border:1px solid #253047;border-radius:0 0 10px 10px;
-                border-top:none;padding:10px 16px 12px;margin-top:-4px;">
-      <div style="font-size:11px;font-weight:600;color:#8B9CB8;margin-bottom:6px;
-                  text-transform:uppercase;letter-spacing:.5px">Team toewijzing</div>
-    </div>
-    """, unsafe_allow_html=True)
-    assign_cols = st.columns(6)
-    for i, (name, checked) in enumerate(st.session_state.assign_opties.items()):
-        with assign_cols[i]:
-            new_val = st.checkbox(name, value=checked, key=f"assign_{name}")
-            st.session_state.assign_opties[name] = new_val
+    with st.container():
+        st.markdown("""<div style="background:#1a2438;border:1px solid #253047;border-radius:10px;
+            padding:10px 16px 12px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:600;color:#8B9CB8;margin-bottom:8px;
+                      text-transform:uppercase;letter-spacing:.5px">📋 Team toewijzing</div></div>""",
+            unsafe_allow_html=True)
+        assign_cols = st.columns(6)
+        for i, (name, checked) in enumerate(st.session_state.assign_opties.items()):
+            with assign_cols[i]:
+                new_val = st.checkbox(name, value=checked, key=f"assign_{name}")
+                st.session_state.assign_opties[name] = new_val
 
 
 # ─────────────────────────────────────────────
