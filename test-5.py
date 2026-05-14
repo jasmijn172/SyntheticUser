@@ -962,11 +962,11 @@ hr { border-color: #1C2A40 !important; margin: 8px 0 !important; }</style>
 def get_groq_client():
     api_key = None
     try:
-        api_key = st.secrets["GROQ_API_KEY"]
+        api_key = st.secrets["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"]
     except Exception:
         pass
     if not api_key:
-        api_key = os.environ.get("GROQ_API_KEY")
+        api_key = os.environ.get("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")
     if api_key:
         return Groq(api_key=api_key)
     return None
