@@ -5,6 +5,8 @@ Exact ontwerp gebaseerd op Archive_4 design
 Groq API (llama-3.3-70b-versatile) voor AI chat
 """
 
+from groq import Client
+from groq import Groq
 import streamlit as st
 import json
 import os
@@ -2095,7 +2097,7 @@ if panel_open and panel_col is not None:
 # BERICHTVERWERKING
 # ─────────────────────────────────────────────
 if send_clicked and user_input.strip():
-    if not client:
+    if not Client:
         st.warning("⚠️ Voeg een geldige GROQ_API_KEY toe aan .streamlit/secrets.toml of als omgevingsvariabele.")
     else:
         nu = time.strftime("%H:%M")
@@ -2108,7 +2110,7 @@ if send_clicked and user_input.strip():
         })
 
         with st.spinner("Synthetic User denkt na..."):
-            resultaat = vraag_groq(client, actieve_p, user_input.strip(), st.session_state.api_berichten)
+            resultaat = vraag_groq(Client, actieve_p, user_input.strip(), st.session_state.api_berichten)
 
         st.session_state.api_berichten.append({"role": "user", "content": user_input.strip()})
         st.session_state.api_berichten.append({"role": "assistant", "content": resultaat["tekst"]})
