@@ -12,9 +12,9 @@ import time
 import math
 import re
 
-import os
-import streamlit as st
-from groq import Groq
+
+
+
 
 def getgroqclient():
     api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
