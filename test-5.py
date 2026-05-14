@@ -12,29 +12,21 @@ import time
 import math
 import re
 
-client = None
+import os
+import streamlit as st
+from groq import Groq
 
 def getgroqclient():
-    apikey = None
-    try:
-        apikey = st.secrets["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"]
-    except Exception:
-        pass
-
-    if not apikey:
-        apikey = os.environ.get("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")
-
-    if apikey:
-        return Groq(api_key=apikey)
-
-    return None
+    api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return None
+    return Groq(api_key=api_key)
 
 client = getgroqclient()
 
 if not client:
-    st.warning("Voeg GROQ_API_KEY toe aan secrets of environment variables.")
+    st.error("Voeg GROQ_API_KEY toe aan secrets of environment variables.")
     st.stop()
-
 
 
 # import base64
