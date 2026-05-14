@@ -1889,31 +1889,31 @@ with (chat_col if panel_open else st.container()):
             st.session_state.panel_mode = "validation" if st.session_state.panel_mode != "validation" else None
             st.rerun()
 
-.rel-button-wrap {
-    margin-left: auto;
-}
+# .rel-button-wrap {
+#     margin-left: auto;
+# }
 
-div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) {
-    margin-left: auto;
-    width: fit-content;
-}
+# div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) {
+#     margin-left: auto;
+#     width: fit-content;
+# }
 
-div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) button {
-    background: transparent !important;
-    border: none !important;
-    color: #3B7EF6 !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
-    padding: 4px 0 !important;
-    height: auto !important;
-    text-align: right !important;
-    box-shadow: none !important;
-}
+# div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) button {
+#     background: transparent !important;
+#     border: none !important;
+#     color: #3B7EF6 !important;
+#     font-size: 11px !important;
+#     font-weight: 500 !important;
+#     padding: 4px 0 !important;
+#     height: auto !important;
+#     text-align: right !important;
+#     box-shadow: none !important;
+# }
 
-div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) button:hover {
-    text-decoration: underline !important;
-    color: #5B9BFF !important;
-}
+# div[data-testid="stButton"]:has(button[key="btn_view_full_report"]) button:hover {
+#     text-decoration: underline !important;
+#     color: #5B9BFF !important;
+# }
 
     # Score detail expander -------------------------------------------------------------------------------------------------------------------------------
     if st.session_state.berichtentelling > 0:
