@@ -17,12 +17,12 @@ client = None
 def getgroqclient():
     apikey = None
     try:
-        apikey = st.secrets["GROQ_API_KEY"]
+        apikey = st.secrets["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"]
     except Exception:
         pass
 
     if not apikey:
-        apikey = os.environ.get("GROQ_API_KEY")
+        apikey = os.environ.get("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")
 
     if apikey:
         return Groq(api_key=apikey)
