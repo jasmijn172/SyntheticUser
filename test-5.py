@@ -58,14 +58,14 @@ section[data-testid="stSidebar"] label {
     font-size: 12px !important;
     font-family: 'DM Sans', sans-serif !important;
 }
-# section[data-testid="stSidebar"] h1,
-# section[data-testid="stSidebar"] h2,
-# section[data-testid="stSidebar"] h3 {
-#     color: #F1F5F9 !important;
-#     font-family: 'Sora', sans-serif !important;
-#     font-size: 14px !important;
-#     margin: 0 !important;
-#     padding: 0 !important;
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #F1F5F9 !important;
+    font-family: 'Sora', sans-serif !important;
+    font-size: 14px !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 /* Sidebar buttons */
