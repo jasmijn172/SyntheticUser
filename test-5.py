@@ -1897,7 +1897,7 @@ with (chat_col if panel_open else st.container()):
             
             ]:
             
-         with col:
+         with col
                     kleur = score_kleur(val)
                     st.markdown(f"""
                     <div class="metric-card">
@@ -1905,7 +1905,8 @@ with (chat_col if panel_open else st.container()):
                       <div class="metric-lbl">{naam}</div>
                       <div style="font-size:9px;color:#8B9CB8;margin-top:2px">{beschr}</div>
                     </div>
-                    """, unsafe_allow_html=True)        
+                    """, unsafe_allow_html=True)
+    }                
 
         if st.button("📥 Download gesprek (JSON)", key="dl_chat"):
             export = {
