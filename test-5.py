@@ -1894,16 +1894,19 @@ with (chat_col if panel_open else st.container()):
                 (sc2, scores["hallucinaties"], "Hallucinaties", "Feitelijkheid"),
                 (sc3, scores["inclusie"], "Inclusie", "Representativiteit"),
                 (sc4, scores["totaal"], "Totaal", "Gecombineerd"),
-            ]:
-                with col:
+         with col:
                     kleur = score_kleur(val)
                     st.markdown(f"""
                     <div class="metric-card">
                       <div class="metric-val" style="color:{kleur}">{val}%</div>
                       <div class="metric-lbl">{naam}</div>
-                      <div style="font-size:9px;color:#8B9CB8;margin-top:-20px">{beschr}</div>
+                      <div style="font-size:9px;color:#8B9CB8;margin-top:2px">{beschr}</div>
                     </div>
                     """, unsafe_allow_html=True)
+
+                
+            ]:
+               
 
         if st.button("📥 Download gesprek (JSON)", key="dl_chat"):
             export = {
