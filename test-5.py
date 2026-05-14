@@ -16,17 +16,17 @@ import re
 
 
 
-def getgroqclient():
-    api_key = st.secrets.get("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") or os.environ.get("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")
-    if not api_key:
-        return None
-    return Groq(api_key=api_key)
+# def getgroqclient():
+#     api_key = st.secrets.get("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") or os.environ.get("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")
+#     if not api_key:
+#         return None
+#     return Groq(api_key=api_key)
 
-client = getgroqclient()
+# client = getgroqclient()
 
-if not client:
-    st.error("Voeg GROQ_API_KEY toe aan secrets of environment variables.")
-    st.stop()
+# if not client:
+#     st.error("Voeg GROQ_API_KEY toe aan secrets of environment variables.")
+#     st.stop()
 
 
 # import base64
