@@ -17,10 +17,13 @@ from pathlib import Path
 
 def get_base64_image(image_path):
     image_path = Path(image_path)
+    if not image_path.exists():
+        st.error(f"Afbeelding niet gevonden: {image_path.resolve()}")
+        st.stop()
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-image_path = "Background_SU.png"  
+image_path = "BackgroundSU.png"
 bg_base64 = get_base64_image(image_path)
 
 # ─────────────────────────────────────────────
