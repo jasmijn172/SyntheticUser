@@ -5,7 +5,7 @@ Exact ontwerp gebaseerd op Archive_4 design
 Groq API (llama-3.3-70b-versatile) voor AI chat
 """
 
-from groq import Client
+
 import streamlit as st
 import json
 import os
