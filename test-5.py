@@ -4,7 +4,6 @@ Upload cleaned_reuma_enquete_V03.csv (of vergelijkbaar) om persona's te generere
 """
 
 import streamlit as st
-from groq import Groq
 import json
 import re
 import pandas as pd
