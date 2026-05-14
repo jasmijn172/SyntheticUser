@@ -889,11 +889,11 @@ hr { border-color: #1C2A40 !important; margin: 8px 0 !important; }
 def get_groq_client():
     api_key = None
     try:
-        api_key = st.secrets["GROQ_API_KEY"]
+        api_key = st.secrets["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"]
     except Exception:
         pass
     if not api_key:
-        api_key = os.environ.get("GROQ_API_KEY")
+        api_key = os.environ.get("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")
     if api_key:
         return Groq(api_key=api_key)
     return None
@@ -1339,15 +1339,6 @@ if st.session_state.assign_open:
 # SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-
-    # # Groq status
-    # client = get_groq_client()
-    # if client:
-    #     st.markdown('<span style="color:#1DB87A;font-size:11px">✓ Groq verbonden (llama-3.3-70b)</span>', unsafe_allow_html=True)
-    # else:
-    #     st.markdown('<span style="color:#F59E0B;font-size:11px">⚠ Voeg GROQ_API_KEY toe aan st.secrets</span>', unsafe_allow_html=True)
-
-    # st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
     # New Chat button
     if st.button("+ New Chat", key="new_chat", use_container_width=True):
