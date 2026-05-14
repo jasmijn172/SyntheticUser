@@ -42,7 +42,7 @@ st.markdown("""
 
 /* ── Reset & Global ── */
 html, body, .stApp {
-    background-color: #0B1220 !important;
+    # background-color: #0B1220 !important;
     color: #F1F5F9 !important;
     font-family: 'DM Sans', sans-serif !important;
     font-size: 13px !important;
