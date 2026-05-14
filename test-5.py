@@ -1885,7 +1885,7 @@ with (chat_col if panel_open else st.container()):
             st.session_state.panel_mode = "validation" if st.session_state.panel_mode != "validation" else None
             st.rerun()
 
-    # Score detail expander
+    # Score detail expander -------------------------------------------------------------------------------------------------------------------------------
     if st.session_state.berichtentelling > 0:
         with st.expander("📈 Score detail — laatste evaluatie", expanded=False):
             sc1, sc2, sc3, sc4 = st.columns(4)
@@ -1901,7 +1901,7 @@ with (chat_col if panel_open else st.container()):
                     <div class="metric-card">
                       <div class="metric-val" style="color:{kleur}">{val}%</div>
                       <div class="metric-lbl">{naam}</div>
-                      <div style="font-size:9px;color:#8B9CB8;margin-top:2px">{beschr}</div>
+                      <div style="font-size:9px;color:#8B9CB8;margin-top:-20px">{beschr}</div>
                     </div>
                     """, unsafe_allow_html=True)
 
