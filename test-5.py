@@ -2126,12 +2126,12 @@ if send_clicked and user_input_field.strip():
     st.session_state.api_berichten.append({"role": "user", "content": user_input})
     st.session_state.api_berichten.append({"role": "assistant", "content": resultaat})
 
-        st.session_state.chatgeschiedenis.append({
-            "rol": "assistent",
-            "inhoud": resultaat["tekst"],
-            "tijd": nu,
-            "toon_persona_kaart": eerste_bericht,
-        })
+    st.session_state.chatgeschiedenis.append({
+        "rol": "assistent",
+        "inhoud": resultaat,
+        "tijd": nu,
+        "toon_persona_kaart": eerste_bericht,
+    })
 
     # if resultaat["succes"]:
     #     st.session_state.scores = resultaat["scores"]
