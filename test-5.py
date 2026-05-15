@@ -1681,6 +1681,11 @@ with st.sidebar:
 
         for proj in PROJECTS:
             is_active = proj["id"] == st.session_state.actief_project_id
+            extra_info = ""
+            if is_active:
+                extra_info = f"""<div style='font-size:10px;color:#8B9CB8;margin-top:5px;padding-left:21px'>
+                - {proj['personas']} Persona's<br>- Average rating {proj['rating']}%<br>- Exported {proj['exports']} times by team 2
+              </div>"""
             st.markdown(f"""
             <div style="background:{'#1a2438' if is_active else 'transparent'};border:1px solid {'#253047' if is_active else '#1C2A40'};
                         border-radius:9px;padding:10px 12px;margin-bottom:6px">
@@ -1697,9 +1702,7 @@ with st.sidebar:
                   {'<span style="color:white;font-size:10px">✓</span>' if is_active else ''}
                 </div>
               </div>
-              {f"""<div style='font-size:10px;color:#8B9CB8;margin-top:5px;padding-left:21px'>
-                • {proj['personas']} Persona's<br>• Average rating {proj['rating']}%<br>• Exported {proj['exports']} times by team 2
-              </div>""" if is_active else ''}
+              {extra_info}
             </div>
             """, unsafe_allow_html=True)
             if st.button(f"Select {proj['naam']}", key=f"proj_sel_{proj['id']}", help=proj["naam"]):
