@@ -264,7 +264,7 @@ Geef verbeterd JSON terug met alle vereiste velden:
 def exporteer_persona(state: PersonaState) -> dict:
     print("  ▶ Node 4: Exporteren...")
     naam = state["persona_schema"]["naam"][:30].replace(" ", "_").replace("/", "-")
-    pad  = f"persona_{naam}.json"
+    pad  = f"./personas/persona_{naam}.json"
     with open(pad, "w", encoding="utf-8") as f:
         json.dump(state["persona_schema"], f, indent=2, ensure_ascii=False)
     return {"export_pad": pad}
