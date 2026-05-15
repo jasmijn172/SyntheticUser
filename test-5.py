@@ -12,6 +12,7 @@ import os
 import time
 import math
 import re
+from user_input_handler import ask_persona
 
 
 
@@ -1839,7 +1840,7 @@ with (chat_col if panel_open else st.container()):
     with input_c1:
         st.markdown('<div style="font-size:22px;color:#3B7EF6;padding-top:8px;text-align:center">✦</div>', unsafe_allow_html=True)
     with input_c2:
-        user_input = st.text_input(
+        user_input_field = st.text_input(
             "vraag",
             placeholder="Ask the Synthetic User...",
             label_visibility="collapsed",
@@ -2097,24 +2098,33 @@ if panel_open and panel_col is not None:
 # ─────────────────────────────────────────────
 # BERICHTVERWERKING
 # ─────────────────────────────────────────────
-if send_clicked and user_input.strip():
-    if not Client:
-        st.warning("⚠️ Voeg een geldige GROQ_API_KEY toe aan .streamlit/secrets.toml of als omgevingsvariabele.")
-    else:
-        nu = time.strftime("%H:%M")
-        eerste_bericht = st.session_state.berichtentelling == 0
 
-        st.session_state.chatgeschiedenis.append({
-            "rol": "gebruiker",
-            "inhoud": user_input.strip(),
-            "tijd": nu,
-        })
 
-        with st.spinner("Synthetic User denkt na..."):
-            resultaat = vraag_groq(Client, actieve_p, user_input.strip(), st.session_state.api_berichten)
+if send_clicked and user_input_field.strip():
+    # if not Client:
+    #     st.warning("⚠️ Voeg een geldige GROQ_API_KEY toe aan .streamlit/secrets.toml of als omgevingsvariabele.")
+    # else:
+    nu = time.strftime("%H:%M")
+    eerste_bericht = st.session_state.berichtentelling == 0
+    user_input = user_input_field.strip()
 
-        st.session_state.api_berichten.append({"role": "user", "content": user_input.strip()})
-        st.session_state.api_berichten.append({"role": "assistant", "content": resultaat["tekst"]})
+    st.session_state.chatgeschiedenis.append({
+        "rol": "gebruiker",
+        "inhoud": user_input,
+        "tijd": nu,
+    })
+
+    # st.session_state.chatgeschiedenis.append({
+    #     "rol": "systeem",
+    #     "inhoud": "De Synthetic User denkt na over het antwoord...",    
+    #     "tijd": nu,
+    # })
+
+    with st.spinner("Synthetic User denkt na..."):
+        resultaat = ask_persona(user_input)
+
+    st.session_state.api_berichten.append({"role": "user", "content": user_input})
+    st.session_state.api_berichten.append({"role": "assistant", "content": resultaat})
 
         st.session_state.chatgeschiedenis.append({
             "rol": "assistent",
@@ -2123,11 +2133,12 @@ if send_clicked and user_input.strip():
             "toon_persona_kaart": eerste_bericht,
         })
 
-        if resultaat["succes"]:
-            st.session_state.scores = resultaat["scores"]
+    # if resultaat["succes"]:
+    #     st.session_state.scores = resultaat["scores"]
 
-        st.session_state.berichtentelling += 1
-        st.rerun()
+    user_input_field = ""  # Clear input field 
+    st.session_state.berichtentelling += 1
+    st.rerun()
 
 
 
