@@ -293,127 +293,129 @@ def kleur_label(score: int) -> str:
     if score <= 80:  return "🟡 GEEL"
     return "🟢 GROEN"
 
-personas_output = []
 
-for naam, persona in evaluatieset:
-    print(f"{'='*50}")
-    print(f"Verwerken: {naam}")
-    resultaat = app.invoke({
-        "persona_tekst":      persona,
-        "persona_schema":     None,
-        "validatie_fouten":   [],
-        "reparatie_pogingen": 0,
-        "export_pad":         None
-    })
-    schema = resultaat["persona_schema"]
-    schema["reparatie_pogingen"] = resultaat["reparatie_pogingen"]
-    personas_output.append(schema)
+def persona_handler():
+    personas_output = []
 
-    b = schema["bias"]
-    h = schema["hallucinaties"]
-    i = schema["inclusie"]
-    print(f"  Bias:          {b['score']:>3}%  {kleur_label(b['score'])}  — {b['toelichting']}")
-    print(f"  Hallucinaties: {h['score']:>3}%  {kleur_label(h['score'])}  — {h['toelichting']}")
-    print(f"  Inclusie:      {i['score']:>3}%  {kleur_label(i['score'])}  — {i['toelichting']}")
-    print(f"  Totaalscore:   {schema['totaalscore']:>3}%  {kleur_label(schema['totaalscore'])}")
+    for naam, persona in evaluatieset:
+        print(f"{'='*50}")
+        print(f"Verwerken: {naam}")
+        resultaat = app.invoke({
+            "persona_tekst":      persona,
+            "persona_schema":     None,
+            "validatie_fouten":   [],
+            "reparatie_pogingen": 0,
+            "export_pad":         None
+        })
+        schema = resultaat["persona_schema"]
+        schema["reparatie_pogingen"] = resultaat["reparatie_pogingen"]
+        personas_output.append(schema)
+
+        b = schema["bias"]
+        h = schema["hallucinaties"]
+        i = schema["inclusie"]
+        print(f"  Bias:          {b['score']:>3}%  {kleur_label(b['score'])}  — {b['toelichting']}")
+        print(f"  Hallucinaties: {h['score']:>3}%  {kleur_label(h['score'])}  — {h['toelichting']}")
+        print(f"  Inclusie:      {i['score']:>3}%  {kleur_label(i['score'])}  — {i['toelichting']}")
+        print(f"  Totaalscore:   {schema['totaalscore']:>3}%  {kleur_label(schema['totaalscore'])}")
 
 
-# ============================================================
-# CSV EXPORT
-# ============================================================
-csv_pad = "personas_evaluatie.csv"
-with open(csv_pad, "w", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow([
-        "naam", "samenvatting", "kenmerken",
-        "bias_score", "bias_toelichting",
-        "hallucinaties_score", "hallucinaties_toelichting",
-        "inclusie_score", "inclusie_toelichting",
-        "totaalscore", "reparatie_pogingen"
-    ])
-    for r in personas_output:
+    # ============================================================
+    # CSV EXPORT
+    # ============================================================
+    csv_pad = "personas_evaluatie.csv"
+    with open(csv_pad, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
         writer.writerow([
-            r["naam"],
-            r["samenvatting"],
-            " | ".join(r["kenmerken"]),
-            r["bias"]["score"],          r["bias"]["toelichting"],
-            r["hallucinaties"]["score"], r["hallucinaties"]["toelichting"],
-            r["inclusie"]["score"],      r["inclusie"]["toelichting"],
-            r["totaalscore"],
-            r["reparatie_pogingen"]
+            "naam", "samenvatting", "kenmerken",
+            "bias_score", "bias_toelichting",
+            "hallucinaties_score", "hallucinaties_toelichting",
+            "inclusie_score", "inclusie_toelichting",
+            "totaalscore", "reparatie_pogingen"
         ])
+        for r in personas_output:
+            writer.writerow([
+                r["naam"],
+                r["samenvatting"],
+                " | ".join(r["kenmerken"]),
+                r["bias"]["score"],          r["bias"]["toelichting"],
+                r["hallucinaties"]["score"], r["hallucinaties"]["toelichting"],
+                r["inclusie"]["score"],      r["inclusie"]["toelichting"],
+                r["totaalscore"],
+                r["reparatie_pogingen"]
+            ])
 
-# ============================================================
-# JSON EXPORT
-# ============================================================
-json_pad = "personas_evaluatie.json"
-with open(json_pad, "w", encoding="utf-8") as f:
-    json.dump(personas_output, f, indent=2, ensure_ascii=False)
+    # ============================================================
+    # JSON EXPORT
+    # ============================================================
+    json_pad = "personas_evaluatie.json"
+    with open(json_pad, "w", encoding="utf-8") as f:
+        json.dump(personas_output, f, indent=2, ensure_ascii=False)
 
-print(f"\n{'='*50}")
-print(f"✅ Evaluatie compleet!")
-print(f"   {len(personas_output)} persona's verwerkt")
-print(f"   📄 CSV:  {csv_pad}")
-print(f"   📦 JSON: {json_pad}")
+    print(f"\n{'='*50}")
+    print(f"✅ Evaluatie compleet!")
+    print(f"   {len(personas_output)} persona's verwerkt")
+    print(f"   📄 CSV:  {csv_pad}")
+    print(f"   📦 JSON: {json_pad}")
 
-"""### Interactie met een Persona-Chatbot
-
-Nu kunnen we een chatbot toevoegen die antwoorden geeft vanuit het perspectief van een van de gegenereerde persona's. Dit kan nuttig zijn om te begrijpen hoe een specifieke gebruiker zou reageren op vragen of scenario's.
-"""
+    return personas_output
 
 # ============================================================
 # CHATBOT MET PERSONA INTERACTIE
 # ============================================================
+def ask_persona(question: str) -> str:
+    # Deze functie zal later worden ingevuld met de chatbot logica
 
-# Controleer of 'personas_output' is gedefinieerd en gevuld
-if 'personas_output' not in locals() or not personas_output:
-    print("❌ Fout: De 'personas_output' lijst is niet gevonden of is leeg.")
-    print("       Zorg ervoor dat de voorgaande cel ('cell_5_workflow') volledig is uitgevoerd.")
-else:
-    # Selecteer een van de gegenereerde persona's om als te fungeren
-    # Voor dit voorbeeld gebruiken we de eerste persona in de lijst.
-    # In een echte toepassing kun je de gebruiker laten kiezen of willekeurig selecteren.
-    selected_persona_data = personas_output[0]
+    personas_output = persona_handler()
 
-    # Creëer een gedetailleerde beschrijving van de geselecteerde persona
-    # Dit zal gebruikt worden in de systeeminstructie van de chatbot
-    persona_description = f"""
-Je bent {selected_persona_data['naam']}. Hier zijn jouw kenmerken en uitdagingen:
-- Samenvatting: {selected_persona_data['samenvatting']}
-- Kenmerken: {', '.join(selected_persona_data['kenmerken'])}
-- Bias Score: {selected_persona_data['bias']['score']}% - {selected_persona_data['bias']['toelichting']}
-- Hallucinatie Score: {selected_persona_data['hallucinaties']['score']}% - {selected_persona_data['hallucinaties']['toelichting']}
-- Inclusie Score: {selected_persona_data['inclusie']['score']}% - {selected_persona_data['inclusie']['toelichting']}
-"""
+    # Controleer of 'personas_output' is gedefinieerd en gevuld
+    if 'personas_output' not in locals() or not personas_output:
+        print("❌ Fout: De 'personas_output' lijst is niet gevonden of is leeg.")
+        print("       Zorg ervoor dat de voorgaande cel ('cell_5_workflow') volledig is uitgevoerd.")
+    else:
+        # Selecteer een van de gegenereerde persona's om als te fungeren
+        # Voor dit voorbeeld gebruiken we de eerste persona in de lijst.
+        # In een echte toepassing kun je de gebruiker laten kiezen of willekeurig selecteren.
+        selected_persona_data = personas_output[0]
 
-    # Prompt template voor de chatbot, inclusief de persona beschrijving
-    chatbot_prompt = ChatPromptTemplate.from_messages([
-        ("system", f"Jij bent een AI-assistent die antwoordt als de volgende persona:\n\n{persona_description}\n\nAntwoord altijd vanuit het perspectief van deze persona. Houd rekening met de leeftijd, achtergrond, uitdagingen en gedragskenmerken van de persona. Wees beknopt en direct."),
-        ("human", "{question}")
-    ])
+        # Creëer een gedetailleerde beschrijving van de geselecteerde persona
+        # Dit zal gebruikt worden in de systeeminstructie van de chatbot
+        persona_description = f"""
+    Je bent {selected_persona_data['naam']}. Hier zijn jouw kenmerken en uitdagingen:
+    - Samenvatting: {selected_persona_data['samenvatting']}
+    - Kenmerken: {', '.join(selected_persona_data['kenmerken'])}
+    - Bias Score: {selected_persona_data['bias']['score']}% - {selected_persona_data['bias']['toelichting']}
+    - Hallucinatie Score: {selected_persona_data['hallucinaties']['score']}% - {selected_persona_data['hallucinaties']['toelichting']}
+    - Inclusie Score: {selected_persona_data['inclusie']['score']}% - {selected_persona_data['inclusie']['toelichting']}
+    """
 
-    # Creëer de chatbot keten
-    chatbot_chain = chatbot_prompt | llm
+        # Prompt template voor de chatbot, inclusief de persona beschrijving
+        chatbot_prompt = ChatPromptTemplate.from_messages([
+            ("system", f"Jij bent een AI-assistent die antwoordt als de volgende persona:\n\n{persona_description}\n\nAntwoord altijd vanuit het perspectief van deze persona. Houd rekening met de leeftijd, achtergrond, uitdagingen en gedragskenmerken van de persona. Wees beknopt en direct."),
+            ("human", "{user_input}")
+        ])
 
-    print(f"✅ Chatbot geladen. Ik beantwoord nu vragen als: {selected_persona_data['naam']}\n")
-    print("Stel een vraag (typ 'stop' om te stoppen):\n")
+        # Creëer de chatbot keten
+        chatbot_chain = chatbot_prompt | llm
 
-    while True:
-        user_question = input("Jouw vraag: ")
-        if user_question.lower() == 'stop':
-            break
+        ps_response = chatbot_chain.invoke({"user_input": question})
 
-        response = chatbot_chain.invoke({"question": user_question})
-        print(f"{selected_persona_data['naam']}: {response.content}\n")
 
-    print("Chatbot sessie beëindigd.")
+        print(f"✅ Chatbot geladen. Ik beantwoord nu vragen als: {selected_persona_data['naam']}\n")
+        print("Stel een vraag (typ 'stop' om te stoppen):\n")
 
-"""Wij eindigen met de vijf persona's die ieder een score krijgen op bias, hallucinaties, inclusie en een totaalscore voor een snel overzicht. Dit zou ik aan de virtuele assistent kunnen koppelen, zodat die de synthetic user 24/7 controleert en de designer kan waarschuwen zodra het geel of zelfs rood wordt en daarvoor ook aanpassingen kan voorstellen.
+        # while True:
+        #     user_question = question
+        #     if user_question.lower() == 'stop':
+        #         break
 
-Dit is waar ik zeker mee aan de slag wil gaan in het volgende blok, evenals het visueel maken in streamlit of door middel van andere programeer talen zoals: html, css en js.
+        #     response = chatbot_chain.invoke({"question": user_question})
+        #     print(f"{selected_persona_data['naam']}: {response.content}\n")
 
-Volgende blok wil ik ook de data gaan gebruiken die we hebben gekregen van de klant, echter is de dataset niet enorm groot waardoor ik blok c en het testen met een croq api key heb gedaan.
+        # print("Chatbot sessie beëindigd.")
+    if not ps_response.content:
+        return "❌ Fout: Geen antwoord ontvangen van de chatbot."
+    else:
+        return ps_response.content
 
-Zelf merk ik dat Blok C het eerste blok is waarbij ik merk dat het steeds leuker wordt om met de code te spelen en gewoon wat te proberen.
-"""
 
