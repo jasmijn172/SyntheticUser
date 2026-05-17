@@ -2062,16 +2062,18 @@ if send_clicked and user_input_field.strip():
     # variable = persona_handler.generate_persona()  # Update persona met gegenereerde details op basis van dataset
 
 
+    # variable = 
 
 
 
+    # # variable = 'blerp'
 
 
-    st.session_state.chatgeschiedenis.append({
-        "rol": "assistent",
-        "inhoud": variable,
-        "tijd": nu,
-    })
+    # st.session_state.chatgeschiedenis.append({
+    #     "rol": "assistent",
+    #     "inhoud": variable,
+    #     "tijd": nu,
+    # })
     # st.session_state.chatgeschiedenis.append({
     #     "rol": "systeem",
     #     "inhoud": "De Synthetic User denkt na over het antwoord...",    
@@ -2079,8 +2081,7 @@ if send_clicked and user_input_field.strip():
     # })
 
     with st.spinner("Synthetic User denkt na..."):
-        # resultaat = persona_handler.ask_persona(user_input)
-        resultaat = "appelsap"
+        resultaat = persona_handler.ask_persona(user_input, PERSONAS[st.session_state.actieve_persona_id - 1].get("naam"))
 
     st.session_state.api_berichten.append({"role": "user", "content": user_input})
     st.session_state.api_berichten.append({"role": "assistant", "content": resultaat})

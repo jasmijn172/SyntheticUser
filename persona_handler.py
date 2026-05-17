@@ -92,7 +92,7 @@ class PersonaHandler:
 
     def __init_ai__(self):
         os.environ['GROQ_API_KEY'] = st.secrets['GROQ_API_KEY']
-        self.llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0, cache=None)
+        self.llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.8, cache=False)
 
     def get_strutured_llm(self, schema):
         return self.llm.with_structured_output(schema, method="json_mode")
@@ -198,7 +198,17 @@ class PersonaHandler:
     def generate_persona(self):
 
         opdracht = self.get_persona_generator_prompt()
-        bestaande_namen = self.load_existing_persona_names()
+        # bestaande_namen = self.load_existing_persona_names()
+        # - Deze namen bestaan al voor persona's, vermijd deze: {bestaande_namen}
+
+        existing_personas = [] 
+        for bestand in os.listdir(self.get_persona_dir_path()):
+            if bestand.endswith(".json"):
+                with open(self.get_persona_dir_path() + bestand, "r", encoding="utf-8") as f:
+                    existing_persona = json.load(f)
+                    existing_personas.append(existing_persona)
+
+        # Een voorbeeld van een al bestaand persona is: {bestaand_persona}
 
         genereer_prompt = ChatPromptTemplate.from_messages([
             ("human", """Je bent een expert in het ontwerpen van inclusieve UX-persona's.
@@ -211,7 +221,9 @@ class PersonaHandler:
                 - Gevarieerd in leeftijd, geslacht en culturele achtergrond
                 - Uitdagingen zijn concreet en verifieerbaar
                 - Geen stereotypen of vooroordelen
-                - Deze namen bestaan al voor persona's, vermijd deze: {bestaande_namen}
+             
+                Deze persona's zijn al gegenereerd: {existing_personas}
+                Vermijd overlap met bestaande persona's, vooral in naam, leeftijd en achtergrond.
 
                 Geef ALLEEN een JSON object terug:
                 {{"personas": [
@@ -243,7 +255,7 @@ class PersonaHandler:
         
         structured_llm = self.get_strutured_llm(PersonaSetSchema)
         chain = genereer_prompt | structured_llm
-        persona = chain.invoke({"opdracht": opdracht, "bestaande_namen": bestaande_namen}, cache=False)
+        persona = chain.invoke({"opdracht": opdracht, "existing_personas": existing_personas}, cache=False)
 
         self.process_persona(json.dumps(persona.model_dump(), ensure_ascii=False))
 
@@ -413,15 +425,17 @@ class PersonaHandler:
 
         return schema
 
+    def load_persona_by_name(self, name: str) -> dict:
 
-    def generate_persona_evaluations(self):
-        os.listdir(self.get_persona_dir_path())
+        name = name.replace(" ", "_")
+
+        path = self.get_persona_dir_path() + f"persona_{name}.json"
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def generate_persona_evaluations(self, persona_json):
         evaluatieset = []
-        for bestand in os.listdir(self.get_persona_dir_path()):
-            if bestand.endswith(".json"):
-                with open(self.get_persona_dir_path() + bestand, "r", encoding="utf-8") as f:
-                    persona = json.load(f)
-                    # evaluatieset.append(self.process_persona(json.dumps(persona, ensure_ascii=False)))
+        evaluatieset.append(self.process_persona(json.dumps(persona_json, ensure_ascii=False)))
 
         self.write_csv_file(evaluatieset)
         self.write_json_file(evaluatieset)
@@ -503,10 +517,14 @@ class PersonaHandler:
     # ============================================================
     # CHATBOT MET PERSONA INTERACTIE
     # ============================================================
-    def ask_persona(self, question: str) -> str:
+    def ask_persona(self, question: str, persona_name: int) -> str:
         # Deze functie zal later worden ingevuld met de chatbot logica
 
-        personas_output = self.generate_persona_evaluations()
+        persona_json = self.load_persona_by_name(persona_name)
+        
+        personas_output = self.generate_persona_evaluations(persona_json)
+
+        
 
         # Controleer of 'personas_output' is gedefinieerd en gevuld
         if 'personas_output' not in locals() or not personas_output:
@@ -528,6 +546,7 @@ class PersonaHandler:
                 - Hallucinatie Score: {selected_persona_data['hallucinaties']['score']}% - {selected_persona_data['hallucinaties']['toelichting']}
                 - Inclusie Score: {selected_persona_data['inclusie']['score']}% - {selected_persona_data['inclusie']['toelichting']}
             """
+
 
             # Prompt template voor de chatbot, inclusief de persona beschrijving
             chatbot_prompt = ChatPromptTemplate.from_messages([
