@@ -12,9 +12,9 @@ import os
 import time
 import math
 import re
-from user_input_handler import ask_persona
+from persona_handler import PersonaHandler
 
-
+persona_handler = PersonaHandler()
 
 
 # def getgroqclient():
@@ -978,84 +978,27 @@ def get_groq_client():
 # ─────────────────────────────────────────────
 # PERSONA DATA
 # ─────────────────────────────────────────────
-PERSONAS = [
-    {
-        "id": 1,
-        "initials": "AJ",
-        "naam": "Alex Johnson",
-        "leeftijd": 52,
-        "leeftijd_label": "52jr",
-        "geslacht": "Vrouw",
-        "diagnose": "Reumatoïde artritis",
-        "quote": "I want to keep living my life, but the fatigue makes it hard to plan or be consistent.",
-        "tags": ["Fatigue", "Pain Management", "Independence", "Work-life balance"],
-        "context": "Works part-time and lives with a partner",
-        "goals": "Stay active, maintain independence",
-        "frustrations": "Unpredictable fatigue, limited energy",
-        "tech_support": "Medium",
-        "data_bronnen": ["ReumaNederland Interviews n=65", "Patiëntforum data", "Wetenschappelijke literatuur"],
-        "sleutelfactoren": ["Diagnose", "Leefstijl", "Emotionele impact"],
-        "xai_uitleg": "Gegenereerd op basis van patronen in de dataset. Fatigue wordt vaak als uitdaging genoemd",
-        "kwaliteit": "goed",
-    },
-    {
-        "id": 2,
-        "initials": "AJ",
-        "naam": "Alex Johnson",
-        "leeftijd": 18,
-        "leeftijd_label": "18jr",
-        "geslacht": "Vrouw",
-        "diagnose": "Juveniele artritis",
-        "quote": "School en sport zijn mijn leven. De pijn maakt dat moeilijk, maar ik geef niet op.",
-        "tags": ["Jong", "School", "Sport", "Vriendschappen"],
-        "context": "Scholier, woont bij ouders",
-        "goals": "Normaal leven leiden, studie afmaken",
-        "frustrations": "Niet begrepen worden, missen van activiteiten",
-        "tech_support": "Hoog",
-        "data_bronnen": ["ReumaNederland Interviews n=65", "Jongerenonderzoek"],
-        "sleutelfactoren": ["Leeftijd", "Sociale context"],
-        "xai_uitleg": "Jong persona met focus op sociale inclusie en schoolprestaties.",
-        "kwaliteit": "goed",
-    },
-    {
-        "id": 3,
-        "initials": "AJ",
-        "naam": "Alex Johnson",
-        "leeftijd": 23,
-        "leeftijd_label": "23jr",
-        "geslacht": "Man",
-        "diagnose": "Artritis psoriatica",
-        "quote": "Ik wil werken en carrière maken, maar de ziekte gooit roet in het eten.",
-        "tags": ["Werk", "Carrière", "Jonge professional", "Zelfstandig"],
-        "context": "Starter op de arbeidsmarkt, eigen appartement",
-        "goals": "Carrière opbouwen, onafhankelijk zijn",
-        "frustrations": "Werkgever begrijpt het niet, energiegebrek",
-        "tech_support": "Hoog",
-        "data_bronnen": ["ReumaNederland survey 2024", "Arbeidsmarktonderzoek"],
-        "sleutelfactoren": ["Werkdruk", "Leefstijl"],
-        "xai_uitleg": "Jonge werkende met focus op professionele ontwikkeling.",
-        "kwaliteit": "goed",
-    },
-    {
-        "id": 4,
-        "initials": "AJ",
-        "naam": "Alex Johnson",
-        "leeftijd": 34,
-        "leeftijd_label": "34jr",
-        "geslacht": "Vrouw",
-        "diagnose": "Reumatoïde artritis",
-        "quote": "Met twee kinderen en een baan is er weinig ruimte voor ziekte. Ik moet vooruit.",
-        "tags": ["Moeder", "Werk", "Gezin", "Multitasking"],
-        "context": "Parttime werkend, twee jonge kinderen",
-        "goals": "Goede moeder zijn, gezin draaiende houden",
-        "frustrations": "Vermoeidheid bij gezinstaken, schuldgevoel",
-        "tech_support": "Gemiddeld",
-        "data_bronnen": ["ReumaNederland Interviews n=65", "Gezinsonderzoek"],
-        "sleutelfactoren": ["Gezinscontext", "Werkdruk", "Vermoeidheid"],
-        "xai_uitleg": "Persona gericht op het combineren van zorg en werk.",
-        "kwaliteit": "goed",
-    },
-]
+PERSONAS = []
+ACTIEVE_P = None
+
+if ACTIEVE_P is None:
+    def load_in_personas():
+        global PERSONAS, ACTIEVE_P
+        
+        PERSONAS = persona_handler.load_personas()
+        # st.write(PERSONAS)
+        if 'actieve_persona_id' in st.session_state and st.session_state.actieve_persona_id is not None:
+            id = st.session_state.actieve_persona_id
+            ACTIEVE_P = PERSONAS[id - 1]
+        else:
+            ACTIEVE_P = PERSONAS[0]
+        
+        
+
+
+
+
+load_in_personas()
 
 PROJECTS = [
     {"id": 1, "naam": "Project 1", "personas": 2, "rating": 71, "exports": 3},
@@ -1282,7 +1225,7 @@ def vraag_groq(client, persona: dict, vraag: str, geschiedenis: list) -> dict:
 # SESSION STATE
 # ─────────────────────────────────────────────
 defaults = {
-    "actieve_persona_id": 1,
+    "actieve_persona_id": 0,
     "actief_project_id": 2,
     "actief_dataset_id": 1,
     "chatgeschiedenis": [],
@@ -1305,7 +1248,8 @@ for k, v in defaults.items():
 def get_actieve_persona():
     return next(p for p in PERSONAS if p["id"] == st.session_state.actieve_persona_id)
 
-
+# st.write(st.session_state.actieve_persona_id)
+# st.write(st.session_state)
 def wissel_persona(pid: int):
     if pid != st.session_state.actieve_persona_id:
         st.session_state.actieve_persona_id = pid
@@ -1327,7 +1271,7 @@ def reset_chat():
 # ─────────────────────────────────────────────
 # TOPBAR
 # ─────────────────────────────────────────────
-actieve_p = get_actieve_persona()
+# actieve_p = get_actieve_persona()
 scores = st.session_state.scores
 
 # CSS: trek de eerste horizontale Streamlit-kolomrij omhoog in de topbar
@@ -1460,14 +1404,14 @@ with _col_export:
     if st.button("↑ Export", key="tb_export", type="primary"):
         export_data = {
             "project": "ReumaNederland",
-            "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
+            "persona": {"naam": ACTIEVE_P["naam"], "leeftijd": ACTIEVE_P["leeftijd"], "diagnose": ACTIEVE_P["diagnose"]},
             "scores": st.session_state.scores,
             "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
         }
         st.download_button(
             "⬇ Download JSON",
             data=json.dumps(export_data, indent=2, ensure_ascii=False),
-            file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
+            file_name=f"data_justice_{ACTIEVE_P['naam'].replace(' ', '_')}.json",
             mime="application/json",
             key="tb_download",
         )
@@ -1541,7 +1485,7 @@ with st.sidebar:
                     <div class="sb-persona-name">{p['naam']}</div>
                     <div class="sb-persona-meta">{p['diagnose'][:24]}…</div>
                   </div>
-                  <div class="{age_class}">{p['leeftijd_label']}</div>
+                  <div class="{age_class}">{p['leeftijd']}jr</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1770,8 +1714,8 @@ with (chat_col if panel_open else st.container()):
           </div>
           <div class="bubble-bot">
             Hallo! Ik ben de <strong>Data Justice Assistent</strong>.<br><br>
-            Actieve synthetic user: <strong>{actieve_p['naam']}</strong>
-            ({actieve_p['leeftijd']}jr, {actieve_p['diagnose']}).<br><br>
+            Actieve synthetic user: <strong>{ACTIEVE_P['naam']}</strong>
+            ({ACTIEVE_P['leeftijd']}jr, {ACTIEVE_P['diagnose']}).<br><br>
             Stel een vraag om de conversatie te starten. Elk antwoord wordt geëvalueerd op
             <strong>bias</strong>, <strong>hallucinaties</strong> en <strong>inclusie</strong>.
           </div>
@@ -1807,15 +1751,15 @@ with (chat_col if panel_open else st.container()):
                       <rect x="3" y="3" width="18" height="14" rx="3" stroke="#5B9BFF" stroke-width="1.5"/>
                       <path d="M8 17v4M16 17v4M6 21h12" stroke="#5B9BFF" stroke-width="1.5" stroke-linecap="round"/>
                     </svg>
-                    Synthetic User · {actieve_p['naam']}
+                    Synthetic User · {ACTIEVE_P['naam']}
                   </div>
                   {sub}
                   <div class="bubble-bot">{inhoud}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 if msg.get("toon_persona_kaart"):
-                    st.markdown(render_persona_card(actieve_p), unsafe_allow_html=True)
-                    st.markdown(render_xai_box(actieve_p), unsafe_allow_html=True)
+                    st.markdown(render_persona_card(ACTIEVE_P), unsafe_allow_html=True)
+                    st.markdown(render_xai_box(ACTIEVE_P), unsafe_allow_html=True)
 
             elif msg["rol"] == "systeem":
                 inhoud = str(msg["inhoud"]).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -1898,14 +1842,14 @@ with (chat_col if panel_open else st.container()):
         if st.button("📥 Download gesprek (JSON)", key="dl_chat"):
             export = {
                 "project": "ReumaNederland",
-                "persona": {"naam": actieve_p["naam"], "leeftijd": actieve_p["leeftijd"], "diagnose": actieve_p["diagnose"]},
+                "persona": {"naam": ACTIEVE_P["naam"], "leeftijd": ACTIEVE_P["leeftijd"], "diagnose": ACTIEVE_P["diagnose"]},
                 "scores": st.session_state.scores,
                 "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
             }
             st.download_button(
                 label="⬇ Download",
                 data=json.dumps(export, indent=2, ensure_ascii=False),
-                file_name=f"data_justice_{actieve_p['naam'].replace(' ', '_')}.json",
+                file_name=f"data_justice_{ACTIEVE_P['naam'].replace(' ', '_')}.json",
                 mime="application/json",
                 key="dl_chat_btn",
             )
@@ -2034,14 +1978,14 @@ if panel_open and panel_col is not None:
             with exp_c:
                 if st.button("Export report", key="exp_fr", use_container_width=True, type="primary"):
                     rapport = {
-                        "persona": actieve_p["naam"],
+                        "persona": ACTIEVE_P["naam"],
                         "scores": st.session_state.scores,
                         "chatgeschiedenis": [{"rol": m["rol"], "inhoud": m["inhoud"]} for m in st.session_state.chatgeschiedenis],
                     }
                     st.download_button(
                         "⬇ JSON",
                         data=json.dumps(rapport, indent=2, ensure_ascii=False),
-                        file_name=f"rapport_{actieve_p['naam'].replace(' ', '_')}.json",
+                        file_name=f"rapport_{ACTIEVE_P['naam'].replace(' ', '_')}.json",
                         mime="application/json",
                         key="dl_rapport",
                     )
@@ -2114,6 +2058,20 @@ if send_clicked and user_input_field.strip():
         "tijd": nu,
     })
 
+    #TODO: ADD THIS CODE LINE TO THE GENERATE PERSONA BUTTON!!!
+    # variable = persona_handler.generate_persona()  # Update persona met gegenereerde details op basis van dataset
+
+
+
+
+
+
+
+    st.session_state.chatgeschiedenis.append({
+        "rol": "assistent",
+        "inhoud": variable,
+        "tijd": nu,
+    })
     # st.session_state.chatgeschiedenis.append({
     #     "rol": "systeem",
     #     "inhoud": "De Synthetic User denkt na over het antwoord...",    
@@ -2121,7 +2079,8 @@ if send_clicked and user_input_field.strip():
     # })
 
     with st.spinner("Synthetic User denkt na..."):
-        resultaat = ask_persona(user_input)
+        # resultaat = persona_handler.ask_persona(user_input)
+        resultaat = "appelsap"
 
     st.session_state.api_berichten.append({"role": "user", "content": user_input})
     st.session_state.api_berichten.append({"role": "assistant", "content": resultaat})
@@ -2135,6 +2094,8 @@ if send_clicked and user_input_field.strip():
 
     # if resultaat["succes"]:
     #     st.session_state.scores = resultaat["scores"]
+
+    st.success(st.session_state.chatgeschiedenis)
 
     user_input_field = ""  # Clear input field 
     st.session_state.berichtentelling += 1
