@@ -13,6 +13,7 @@ import time
 import math
 import re
 from persona_handler import PersonaHandler
+import base64
 
 persona_handler = PersonaHandler()
 
@@ -28,6 +29,26 @@ persona_handler = PersonaHandler()
 # if not client:
 #     st.error("Voeg GROQ_API_KEY toe aan secrets of environment variables.")
 #     st.stop()
+
+def get_base64(file_path):
+    with open(file_path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+img = get_base64("Background_SU.png")
+
+st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/png;base64,{img}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # ─────────────────────────────────────────────
 # PAGINA CONFIG
@@ -1692,13 +1713,9 @@ else:
 with (chat_col if panel_open else st.container()):
 
     # Chat achtergrond wrapper open
-    st.markdown("""
-    <div id="chat-scroll" style="min-height:400px;padding:20px 24px 8px;
-        background:
-          radial-gradient(ellipse at 75% 30%, rgba(26,79,160,0.18) 0%, transparent 55%),
-          radial-gradient(ellipse at 90% 80%, rgba(59,126,246,0.08) 0%, transparent 40%),
-          #0B1220;">
-    """, unsafe_allow_html=True)
+    # st.markdown("""
+    # <div id="chat-scroll" style="min-height:400px;padding:20px 24px 8px;">
+    # """, unsafe_allow_html=True)
 
     # Welkomstbericht
     if not st.session_state.chatgeschiedenis:
@@ -1771,7 +1788,7 @@ with (chat_col if panel_open else st.container()):
                 """, unsafe_allow_html=True)
 
     # Chat wrapper sluiten
-    st.markdown("</div>", unsafe_allow_html=True)
+    # st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Input (boven reliability bar) ──
     st.markdown("""
